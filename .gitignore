@@ -1,4 +1,5 @@
 # Local editor and operating-system files
+.worktrees/
 .DS_Store
 *.swp
 *.bak
