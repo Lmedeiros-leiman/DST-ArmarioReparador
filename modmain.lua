@@ -9,20 +9,10 @@ local mathmod = wardrobe_restorer_math
 local containers = GLOBAL.require("containers")
 local Vector3 = GLOBAL.Vector3
 
--- UI banks that actually exist in the game. 20 slots (5x4) is the largest
--- vanilla container background.
-local LAYOUTS =
-{
-    [9]  = { cols = 3, spacing = 80, bank = "ui_chest_3x3",        pos_y = 200 },
-    [16] = { cols = 4, spacing = 80, bank = "ui_boat_ancient_4x4", pos_y = 200 },
-    [20] = { cols = 5, spacing = 75, bank = "ui_fish_box_5x4",     pos_y = 220 },
-}
-
-local num_slots = GetModConfigData("num_slots") or 20
-local layout = LAYOUTS[num_slots] or LAYOUTS[20]
+local layout = mathmod.get_slot_layout(GetModConfigData("num_slots"))
 
 local slotpos = {}
-for _, point in ipairs(mathmod.build_grid(num_slots, layout.cols, layout.spacing)) do
+for _, point in ipairs(mathmod.build_grid(layout.num_slots, layout.cols, layout.spacing)) do
     table.insert(slotpos, Vector3(point.x, point.y, 0))
 end
 
@@ -115,8 +105,7 @@ AddPrefabPostInit("wardrobe", function(inst)
     inst.components.container:WidgetSetup("wardrobe_restorer")
 
     local rate = GetModConfigData("recovery_rate") or 5
-    local slots = GetModConfigData("num_slots") or 20
-    inst.components.container:SetNumSlots(slots)
+    inst.components.container:SetNumSlots(layout.num_slots)
 
     inst:DoPeriodicTask(1, function()
         recover_items_in(inst, rate, 1)

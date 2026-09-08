@@ -101,6 +101,34 @@ assert_eq(M.accepts_item(true, true), false, "perishable equipment is rejected")
 assert_eq(M.accepts_item(false, false), false, "non-equipment is rejected")
 assert_eq(M.accepts_item(nil, false), false, "missing equippable is rejected")
 
+-- The mod configuration accepts square grids from 2x2 through 7x7, plus
+-- the existing 5x4 default. Unsupported values must not create invisible
+-- slots outside the selected widget geometry.
+do
+    local cases =
+    {
+        { requested = 4,  slots = 4,  cols = 2, label = "2x2" },
+        { requested = 9,  slots = 9,  cols = 3, label = "3x3" },
+        { requested = 16, slots = 16, cols = 4, label = "4x4" },
+        { requested = 20, slots = 20, cols = 5, label = "5x4 default" },
+        { requested = 25, slots = 25, cols = 5, label = "5x5" },
+        { requested = 36, slots = 36, cols = 6, label = "6x6" },
+        { requested = 49, slots = 49, cols = 7, label = "7x7" },
+    }
+
+    for _, case in ipairs(cases) do
+        local layout = M.get_slot_layout(case.requested)
+        assert_eq(layout.num_slots, case.slots, case.label .. " keeps its slot count")
+        assert_eq(layout.cols, case.cols, case.label .. " uses the right column count")
+        local grid = M.build_grid(layout.num_slots, layout.cols, layout.spacing)
+        assert_eq(#grid, case.slots, case.label .. " builds every slot")
+    end
+
+    local fallback = M.get_slot_layout(24)
+    assert_eq(fallback.num_slots, 20, "unsupported slot count falls back to 20")
+    assert_eq(fallback.cols, 5, "unsupported slot count uses the 5x4 layout")
+end
+
 -- Grid generator must reproduce the exact vanilla layouts.
 do
     local grid = M.build_grid(9, 3, 80)

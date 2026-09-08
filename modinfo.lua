@@ -1,5 +1,5 @@
 name = "Wardrobe Restorer (Armario Restaurador)"
-description = [[O armario vira um bau de ate 20 slots e restaura a durabilidade do que estiver guardado nele.
+description = [[O armario vira um bau de 4 a 49 slots e restaura a durabilidade do que estiver guardado nele.
 
 Aceita apenas equipamento (ferramentas, armas, armaduras, amuletos). Itens que apodrecem (como ham bat) e itens nao equipaveis (como thermal stone) sao bloqueados. Durabilidade cobre usos, armadura e combustivel (fueled).
 
@@ -7,7 +7,7 @@ Itens com durabilidade recuperam 5% por dia por padrao: de 0% a 100% em 20 dias,
 
 Clique esquerdo abre o menu de troca de skin (como sempre). Clique direito abre o armazenamento.]]
 author = "Leonardo"
-version = "1.0.0"
+version = "1.1.0"
 
 forumthread = ""
 
@@ -34,12 +34,16 @@ configuration_options =
     {
         name = "num_slots",
         label = "Slots",
-        hover = "Quantidade de slots do armario. 20 e o maior layout com interface nativa do jogo.",
+        hover = "Quantidade de slots do armario. Acima de 20, os slots extras nao tem moldura personalizada.",
         options =
         {
+            { description = "4 (2x2)", data = 4 },
             { description = "9 (bau 3x3)", data = 9 },
             { description = "16 (4x4)", data = 16 },
-            { description = "20 (5x4)", data = 20 },
+            { description = "20 (5x4, padrao)", data = 20 },
+            { description = "25 (5x5)", data = 25 },
+            { description = "36 (6x6)", data = 36 },
+            { description = "49 (7x7)", data = 49 },
         },
         default = 20,
     },
