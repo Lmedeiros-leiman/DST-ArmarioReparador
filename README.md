@@ -28,7 +28,8 @@ Requer Lua 5.1.
 ```bash
 lua5.1 test/test_recover.lua
 lua5.1 test/test_modenv.lua
-luac5.1 -p modinfo.lua modmain.lua wardrobe_restorer_math.lua test/test_recover.lua test/test_modenv.lua
+lua5.1 test/test_modmain.lua
+luac5.1 -p modinfo.lua modmain.lua wardrobe_restorer_math.lua test/test_recover.lua test/test_modenv.lua test/test_modmain.lua
 ```
 
-Os testes validam os calculos de recuperacao, os layouts de slots, o filtro de itens e o contrato de carregamento de modulos do ambiente do DST.
+Os testes validam os calculos de recuperacao, os layouts de slots, o filtro de itens, o modmain contra um ambiente DST simulado e o contrato de carregamento de modulos do ambiente do DST.
