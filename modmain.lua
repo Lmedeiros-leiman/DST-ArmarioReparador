@@ -17,7 +17,9 @@ for _, point in ipairs(mathmod.build_grid(layout.num_slots, layout.cols, layout.
     table.insert(slotpos, Vector3(point.x, point.y, 0))
 end
 
-containers.params.wardrobe_restorer =
+-- Clients set up the widget from the prefab name, so the params must be
+-- keyed by "wardrobe" or the client gets no widget and crashes on open.
+containers.params.wardrobe =
 {
     widget =
     {
@@ -40,6 +42,11 @@ containers.params.wardrobe_restorer =
             item:HasTag("show_spoilage"))
     end,
 }
+
+-- container_classified preallocates MAXITEMSLOTS slot netvars, sized at load
+-- time to the largest vanilla container (20). Grids above that would run out
+-- of netvars and crash when a wardrobe spawns.
+containers.MAXITEMSLOTS = math.max(containers.MAXITEMSLOTS, layout.num_slots)
 
 -- The built-in container collector already adds RUMMAGE on both click sides.
 -- On left clicks we also offer CHANGEIN, which has the higher priority, so
@@ -106,7 +113,7 @@ AddPrefabPostInit("wardrobe", function(inst)
     inst:UnregisterComponentActions("wardrobe")
 
     inst:AddComponent("container")
-    inst.components.container:WidgetSetup("wardrobe_restorer")
+    inst.components.container:WidgetSetup("wardrobe")
 
     local rate = GetModConfigData("recovery_rate") or 5
     inst.components.container:SetNumSlots(layout.num_slots)
@@ -119,6 +126,21 @@ AddPrefabPostInit("wardrobe", function(inst)
 
     inst.OnLongUpdate = function(inst_, dt)
         recover_items_in(inst_, rate, dt)
+    end
+
+    -- The vanilla hammer callback only drops the recipe loot, which would
+    -- delete everything stored inside.
+    local workable = inst.components.workable
+    if workable ~= nil then
+        local onfinish = workable.onfinish
+        workable:SetOnFinishCallback(function(inst_, worker)
+            if inst_.components.container ~= nil then
+                inst_.components.container:DropEverything()
+            end
+            if onfinish ~= nil then
+                onfinish(inst_, worker)
+            end
+        end)
     end
 
     -- Same open/close feedback the wardrobe uses while changing skins.

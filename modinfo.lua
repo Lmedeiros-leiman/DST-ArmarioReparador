@@ -1,7 +1,7 @@
 name = "Wardrobe Storage and Repair"
 description = [[Turns the wardrobe into a 20 slot chest that slowly repairs the equipment stored inside. Right click opens the storage, left click still changes skins.]]
 author = "Frytura"
-version = "1.2.0"
+version = "1.2.1"
 
 forumthread = ""
 
