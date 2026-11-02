@@ -1,13 +1,7 @@
-name = "Wardrobe Restorer (Armario Restaurador)"
-description = [[O armario vira um bau de 4 a 49 slots e restaura a durabilidade do que estiver guardado nele.
-
-Aceita apenas equipamento (ferramentas, armas, armaduras, amuletos). Itens que apodrecem (como ham bat) e itens nao equipaveis (como thermal stone) sao bloqueados. Durabilidade cobre usos, armadura e combustivel (fueled).
-
-Itens com durabilidade recuperam 5% por dia por padrao: de 0% a 100% em 20 dias, aos poucos, tick a tick.
-
-Clique esquerdo abre o menu de troca de skin (como sempre). Clique direito abre o armazenamento.]]
-author = "Leonardo"
-version = "1.1.0"
+name = "Wardrobe Storage and Repair"
+description = [[Turns the wardrobe into a 20 slot chest that slowly repairs the equipment stored inside. Right click opens the storage, left click still changes skins.]]
+author = "Frytura"
+version = "1.2.0"
 
 forumthread = ""
 
@@ -20,8 +14,8 @@ reign_of_giants_compatible = false
 all_clients_require_mod = true
 client_only_mod = false
 
-icon = nil
-icon_atlas = nil
+icon = "modicon.tex"
+icon_atlas = "modicon.xml"
 
 server_filter_tags =
 {
@@ -34,13 +28,13 @@ configuration_options =
     {
         name = "num_slots",
         label = "Slots",
-        hover = "Quantidade de slots do armario. Acima de 20, os slots extras nao tem moldura personalizada.",
+        hover = "Number of wardrobe slots. Above 20, the extra slots have no custom frame.",
         options =
         {
             { description = "4 (2x2)", data = 4 },
-            { description = "9 (bau 3x3)", data = 9 },
+            { description = "9 (chest 3x3)", data = 9 },
             { description = "16 (4x4)", data = 16 },
-            { description = "20 (5x4, padrao)", data = 20 },
+            { description = "20 (5x4, default)", data = 20 },
             { description = "25 (5x5)", data = 25 },
             { description = "36 (6x6)", data = 36 },
             { description = "49 (7x7)", data = 49 },
@@ -49,21 +43,38 @@ configuration_options =
     },
     {
         name = "recovery_rate",
-        label = "Recuperacao (%/dia)",
-        hover = "Durabilidade recuperada por dia. 5% leva um item de 0% a 100% em 20 dias.",
+        label = "Recovery (%/day)",
+        hover = "Durability recovered per day. 5% takes an item from 0% to 100% in 20 days.",
         options =
         {
-            { description = "1% (100 dias)", data = 1 },
-            { description = "2% (50 dias)", data = 2 },
-            { description = "3% (33 dias)", data = 3 },
-            { description = "4% (25 dias)", data = 4 },
-            { description = "5% (20 dias)", data = 5 },
-            { description = "6% (17 dias)", data = 6 },
-            { description = "8% (13 dias)", data = 8 },
-            { description = "10% (10 dias)", data = 10 },
-            { description = "15% (7 dias)", data = 15 },
-            { description = "20% (5 dias)", data = 20 },
+            { description = "1% (100 days)", data = 1 },
+            { description = "2% (50 days)", data = 2 },
+            { description = "3% (33 days)", data = 3 },
+            { description = "4% (25 days)", data = 4 },
+            { description = "5% (20 days)", data = 5 },
+            { description = "6% (17 days)", data = 6 },
+            { description = "8% (13 days)", data = 8 },
+            { description = "10% (10 days)", data = 10 },
+            { description = "15% (7 days)", data = 15 },
+            { description = "20% (5 days)", data = 20 },
         },
         default = 5,
+    },
+    {
+        name = "half_rate",
+        label = "Half speed",
+        hover = "Categories that recover at half the configured rate. Magical: staffs, amulets, pan flute, shadow gear (the Lazy Forager counts as a tool). Tools: tools, weapons and armor. Clothing: sewable items.",
+        options =
+        {
+            { description = "None", data = "none" },
+            { description = "Magical", data = "magical" },
+            { description = "Tools", data = "tools" },
+            { description = "Clothing", data = "clothing" },
+            { description = "Magical + tools", data = "magical+tools" },
+            { description = "Magical + clothing", data = "magical+clothing" },
+            { description = "Tools + clothing", data = "tools+clothing" },
+            { description = "All", data = "all" },
+        },
+        default = "magical",
     },
 }

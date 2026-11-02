@@ -74,13 +74,17 @@ assert_eq(M.recovery_delta(100, 5, -10), 0, "negative dt gives zero delta")
 -- Custom day length is honored (used if we ever read it from the world).
 assert_eq(M.recovery_delta(480, 100, 480, 960), 240, "custom day length scales the delta")
 
--- Tick accumulation: 20 days of 1-second ticks ends at full.
+-- Step accumulation: 20 days of one step per segment ends at full.
 do
     local current = 0
-    for _ = 1, 20 * 480 do
-        current = M.recover(current, 100, 5, 1)
+    local steps_per_day = M.DAY_LENGTH_SECONDS / M.SEGMENT_LENGTH_SECONDS
+    assert_eq(steps_per_day, 16, "a day has 16 segments")
+    for _ = 1, 20 * steps_per_day do
+        current = M.recover(current, 100, 5, M.SEGMENT_LENGTH_SECONDS)
     end
-    assert_near(current, 100, 1e-6, "20 days of 1s ticks fill the item")
+    assert_near(current, 100, 1e-6, "20 days of per-segment steps fill the item")
+    assert_near(M.recovery_delta(100, 5, M.SEGMENT_LENGTH_SECONDS), 0.3125, 1e-9,
+        "one segment at 5%/day restores 0.3125% of a 100-use item")
 end
 
 -- Integration contract used by modmain: finiteuses pairs current with total,
@@ -100,6 +104,44 @@ assert_eq(M.accepts_item(true, false), true, "plain equipment is accepted")
 assert_eq(M.accepts_item(true, true), false, "perishable equipment is rejected")
 assert_eq(M.accepts_item(false, false), false, "non-equipment is rejected")
 assert_eq(M.accepts_item(nil, false), false, "missing equippable is rejected")
+
+-- Item classification: magical by prefab, clothing by usage fuel, the rest
+-- are tools. The Lazy Forager is exempt from the magical list.
+assert_eq(M.item_category("panflute", false), "magical", "pan flute is magical")
+assert_eq(M.item_category("greenamulet", false), "magical", "construction amulet is magical")
+assert_eq(M.item_category("yellowamulet", false), "magical", "magiluminescence is magical")
+assert_eq(M.item_category("greenstaff", false), "magical", "deconstruction staff is magical")
+assert_eq(M.item_category("orangestaff", false), "magical", "lazy explorer is magical")
+assert_eq(M.item_category("orangeamulet", false), "tools", "lazy forager counts as a tool")
+assert_eq(M.item_category("spear", false), "tools", "spear is a tool")
+assert_eq(M.item_category("armorwood", false), "tools", "armor counts as a tool")
+assert_eq(M.item_category("tophat", true), "clothing", "usage-fueled gear is clothing")
+assert_eq(M.item_category("minerhat", false), "tools", "cave-fueled hat is not clothing")
+assert_eq(M.item_category(nil, false), "tools", "missing prefab is a tool")
+
+-- The half-rate setting selects categories.
+assert_eq(M.half_rate_applies("none", "magical"), false, "none covers nothing")
+assert_eq(M.half_rate_applies("all", "clothing"), true, "all covers everything")
+assert_eq(M.half_rate_applies("magical", "magical"), true, "magical covers magical")
+assert_eq(M.half_rate_applies("magical", "tools"), false, "magical does not cover tools")
+assert_eq(M.half_rate_applies("magical+tools", "tools"), true, "magical+tools covers tools")
+assert_eq(M.half_rate_applies("magical+tools", "magical"), true, "magical+tools covers magical")
+assert_eq(M.half_rate_applies("magical+tools", "clothing"), false, "magical+tools does not cover clothing")
+assert_eq(M.half_rate_applies("tools+clothing", "clothing"), true, "tools+clothing covers clothing")
+assert_eq(M.half_rate_applies(nil, "magical"), false, "missing setting covers nothing")
+
+-- Multiplier under the default setting ("magical").
+assert_eq(M.rate_multiplier("magical", "firestaff", false), 0.5, "staff recovers at half rate")
+assert_eq(M.rate_multiplier("magical", "orangeamulet", false), 1, "lazy forager recovers at full rate")
+assert_eq(M.rate_multiplier("magical", "spear", false), 1, "tool recovers at full rate")
+assert_eq(M.rate_multiplier("magical", "tophat", true), 1, "clothing recovers at full rate")
+assert_eq(M.rate_multiplier("all", "spear", false), 0.5, "all halves tools")
+assert_eq(M.rate_multiplier("none", "firestaff", false), 1, "none keeps staffs at full rate")
+assert_eq(M.rate_multiplier("clothing", "tophat", true), 0.5, "clothing setting halves clothing")
+assert_near(M.recover(0, 100, 5 * M.rate_multiplier("magical", "firestaff", false), 480 * 20), 50, 1e-9,
+    "a magical item at 5%/day reaches 50% after 20 days")
+assert_near(M.recover(0, 100, 5 * M.rate_multiplier("magical", "firestaff", false), 480 * 40), 100, 1e-9,
+    "a magical item at 5%/day fills in 40 days")
 
 -- The mod configuration accepts square grids from 2x2 through 7x7, plus
 -- the existing 5x4 default. Unsupported values must not create invisible

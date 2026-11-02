@@ -1,4 +1,4 @@
--- Wardrobe Restorer
+-- Wardrobe Storage and Repair
 -- Adds chest storage to the vanilla wardrobe and slowly restores the
 -- durability of items stored inside. Left click keeps the skin-change menu,
 -- right click opens the storage.
@@ -10,6 +10,7 @@ local containers = GLOBAL.require("containers")
 local Vector3 = GLOBAL.Vector3
 
 local layout = mathmod.get_slot_layout(GetModConfigData("num_slots"))
+local half_rate = GetModConfigData("half_rate") or "magical"
 
 local slotpos = {}
 for _, point in ipairs(mathmod.build_grid(layout.num_slots, layout.cols, layout.spacing)) do
@@ -67,15 +68,18 @@ local function recover_items_in(inst, rate, dt)
         local comps = item ~= nil and item.components or nil
         -- Items that rot never recover (and should not be stored anyway).
         if comps ~= nil and comps.perishable == nil then
+            -- Selected categories recover at a fraction of the configured rate.
+            local item_rate = rate * mathmod.rate_multiplier(half_rate, item.prefab,
+                comps.fueled ~= nil and comps.fueled.fueltype == GLOBAL.FUELTYPE.USAGE)
             local finiteuses = comps.finiteuses
             if finiteuses ~= nil and finiteuses.current < finiteuses.total then
-                finiteuses:Repair(mathmod.recovery_delta(finiteuses.total, rate, dt))
+                finiteuses:Repair(mathmod.recovery_delta(finiteuses.total, item_rate, dt))
             end
             local armor = comps.armor
             if armor ~= nil
                 and not armor:IsIndestructible()
                 and armor.condition < armor.maxcondition then
-                armor:SetCondition(armor.condition + mathmod.recovery_delta(armor.maxcondition, rate, dt))
+                armor:SetCondition(armor.condition + mathmod.recovery_delta(armor.maxcondition, item_rate, dt))
             end
             -- Covers fueled amulets and clothing. Items the game marks as
             -- unrepairable keep that rule.
@@ -84,7 +88,7 @@ local function recover_items_in(inst, rate, dt)
                 and not fueled.no_sewing
                 and fueled.maxfuel ~= nil and fueled.maxfuel > 0
                 and fueled.currentfuel < fueled.maxfuel then
-                fueled:DoDelta(mathmod.recovery_delta(fueled.maxfuel, rate, dt))
+                fueled:DoDelta(mathmod.recovery_delta(fueled.maxfuel, item_rate, dt))
             end
         end
     end
@@ -107,8 +111,10 @@ AddPrefabPostInit("wardrobe", function(inst)
     local rate = GetModConfigData("recovery_rate") or 5
     inst.components.container:SetNumSlots(layout.num_slots)
 
-    inst:DoPeriodicTask(1, function()
-        recover_items_in(inst, rate, 1)
+    -- One repair step per day segment (16 per day) rather than every second.
+    local segment = GLOBAL.TUNING.SEG_TIME or mathmod.SEGMENT_LENGTH_SECONDS
+    inst:DoPeriodicTask(segment, function()
+        recover_items_in(inst, rate, segment)
     end)
 
     inst.OnLongUpdate = function(inst_, dt)

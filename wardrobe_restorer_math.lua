@@ -4,6 +4,7 @@
 local M = {}
 
 -- A full DST day cycle is 16 segments of 30 seconds.
+M.SEGMENT_LENGTH_SECONDS = 30
 M.DAY_LENGTH_SECONDS = 480
 
 -- The game ships backgrounds through 5x4 only. Larger grids reuse that
@@ -40,6 +41,84 @@ function M.recover(current, max_amount, rate_per_day, dt, day_length)
         next_value = max_amount
     end
     return next_value
+end
+
+-- Categories selected by the half-rate setting recover at this fraction of
+-- the configured rate.
+M.MAGIC_RATE_MULTIPLIER = 0.5
+
+-- Prefab names of magical, non-clothing items with durability. The Lazy
+-- Forager (orangeamulet) is intentionally left out: it is niche enough
+-- that it always counts as an ordinary tool.
+M.MAGIC_ITEMS =
+{
+    -- Magic tab
+    panflute = true,
+    onemanband = true,
+    nightsword = true,
+    armor_sanity = true,
+    batbat = true,
+    armorslurper = true,
+    antlionhat = true,
+    armordreadstone = true,
+    dreadstonehat = true,
+    pocketwatch_weapon = true,
+    amulet = true,
+    blueamulet = true,
+    purpleamulet = true,
+    firestaff = true,
+    icestaff = true,
+    telestaff = true,
+    -- Ancient tab
+    greenamulet = true,
+    yellowamulet = true,
+    greenstaff = true,
+    orangestaff = true,
+    yellowstaff = true,
+    opalstaff = true,
+}
+
+-- Item categories used by the half-rate setting.
+M.CATEGORY_MAGICAL = "magical"
+M.CATEGORY_TOOLS = "tools"
+M.CATEGORY_CLOTHING = "clothing"
+
+-- Classifies an item: magical items by prefab name, clothing by usage fuel
+-- (hats, vests and other sewable gear), everything else (tools, weapons,
+-- armor, lanterns) as tools.
+function M.item_category(prefab, is_usage_fueled)
+    if type(prefab) == "string" and M.MAGIC_ITEMS[prefab] then
+        return M.CATEGORY_MAGICAL
+    end
+    if is_usage_fueled == true then
+        return M.CATEGORY_CLOTHING
+    end
+    return M.CATEGORY_TOOLS
+end
+
+-- Whether the half-rate setting ("none", "all", or categories joined with
+-- "+", e.g. "magical+tools") covers the given category.
+function M.half_rate_applies(selection, category)
+    if type(selection) ~= "string" or selection == "none" then
+        return false
+    end
+    if selection == "all" then
+        return true
+    end
+    for part in string.gmatch(selection, "[^+]+") do
+        if part == category then
+            return true
+        end
+    end
+    return false
+end
+
+-- Recovery rate multiplier for an item under the given half-rate setting.
+function M.rate_multiplier(selection, prefab, is_usage_fueled)
+    if M.half_rate_applies(selection, M.item_category(prefab, is_usage_fueled)) then
+        return M.MAGIC_RATE_MULTIPLIER
+    end
+    return 1
 end
 
 -- Storage filter: equipment may be stored, perishables may not.
