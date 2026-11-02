@@ -10,7 +10,8 @@ local containers = GLOBAL.require("containers")
 local Vector3 = GLOBAL.Vector3
 
 local layout = mathmod.get_slot_layout(GetModConfigData("num_slots"))
-local half_rate = GetModConfigData("half_rate") or "magical"
+local recovery_rate = GetModConfigData("recovery_rate") or 5
+local halved = mathmod.parse_half_rate(GetModConfigData("half_rate") or "magical")
 
 local slotpos = {}
 for _, point in ipairs(mathmod.build_grid(layout.num_slots, layout.cols, layout.spacing)) do
@@ -65,37 +66,38 @@ AddComponentAction("SCENE", "container", function(inst, doer, actions, right)
     table.insert(actions, GLOBAL.ACTIONS.CHANGEIN)
 end)
 
-local function recover_items_in(inst, rate, dt)
+local function recover_items_in(inst, dt)
+    -- Burning removes the container, which also ends the repairs.
     local container = inst.components.container
-    if container == nil or inst:HasTag("burnt") then
+    if container == nil then
         return
     end
-    for slot = 1, container:GetNumSlots() do
-        local item = container:GetItemInSlot(slot)
-        local comps = item ~= nil and item.components or nil
+    for _, item in pairs(container.slots) do
+        local comps = item.components
         -- Items that rot never recover (and should not be stored anyway).
-        if comps ~= nil and comps.perishable == nil then
+        if comps.perishable == nil then
+            local fueled = comps.fueled
             -- Selected categories recover at a fraction of the configured rate.
-            local item_rate = rate * mathmod.rate_multiplier(half_rate, item.prefab,
-                comps.fueled ~= nil and comps.fueled.fueltype == GLOBAL.FUELTYPE.USAGE)
+            local rate = recovery_rate * mathmod.rate_multiplier(halved, item.prefab,
+                fueled ~= nil and fueled.fueltype == GLOBAL.FUELTYPE.USAGE)
+            -- Each component clamps at its maximum. Full items are skipped so
+            -- they do not push percentusedchange on every step.
             local finiteuses = comps.finiteuses
             if finiteuses ~= nil and finiteuses.current < finiteuses.total then
-                finiteuses:Repair(mathmod.recovery_delta(finiteuses.total, item_rate, dt))
+                finiteuses:Repair(mathmod.recovery_delta(finiteuses.total, rate, dt))
             end
+            -- SetCondition ignores indestructible armor.
             local armor = comps.armor
-            if armor ~= nil
-                and not armor:IsIndestructible()
-                and armor.condition < armor.maxcondition then
-                armor:SetCondition(armor.condition + mathmod.recovery_delta(armor.maxcondition, item_rate, dt))
+            if armor ~= nil and armor.condition < armor.maxcondition then
+                armor:SetCondition(armor.condition + mathmod.recovery_delta(armor.maxcondition, rate, dt))
             end
             -- Covers fueled amulets and clothing. Items the game marks as
             -- unrepairable keep that rule.
-            local fueled = comps.fueled
             if fueled ~= nil
                 and not fueled.no_sewing
-                and fueled.maxfuel ~= nil and fueled.maxfuel > 0
+                and fueled.maxfuel > 0
                 and fueled.currentfuel < fueled.maxfuel then
-                fueled:DoDelta(mathmod.recovery_delta(fueled.maxfuel, item_rate, dt))
+                fueled:DoDelta(mathmod.recovery_delta(fueled.maxfuel, rate, dt))
             end
         end
     end
@@ -112,21 +114,18 @@ AddPrefabPostInit("wardrobe", function(inst)
     -- by our container collector above.
     inst:UnregisterComponentActions("wardrobe")
 
+    -- WidgetSetup also sets the slot count from the widget's slot positions.
     inst:AddComponent("container")
-    inst.components.container:WidgetSetup("wardrobe")
+    local container = inst.components.container
+    container:WidgetSetup("wardrobe")
 
-    local rate = GetModConfigData("recovery_rate") or 5
-    inst.components.container:SetNumSlots(layout.num_slots)
+    -- Same open/close feedback the wardrobe uses while changing skins.
+    container.onopenfn = inst.components.wardrobe.onopenfn
+    container.onclosefn = inst.components.wardrobe.onclosefn
 
     -- One repair step per day segment (16 per day) rather than every second.
-    local segment = GLOBAL.TUNING.SEG_TIME or mathmod.SEGMENT_LENGTH_SECONDS
-    inst:DoPeriodicTask(segment, function()
-        recover_items_in(inst, rate, segment)
-    end)
-
-    inst.OnLongUpdate = function(inst_, dt)
-        recover_items_in(inst_, rate, dt)
-    end
+    inst:DoPeriodicTask(mathmod.SEGMENT_LENGTH_SECONDS, recover_items_in, nil, mathmod.SEGMENT_LENGTH_SECONDS)
+    inst.OnLongUpdate = recover_items_in
 
     -- The vanilla hammer callback only drops the recipe loot, which would
     -- delete everything stored inside.
@@ -143,17 +142,4 @@ AddPrefabPostInit("wardrobe", function(inst)
         end)
     end
 
-    -- Same open/close feedback the wardrobe uses while changing skins.
-    inst.components.container.onopenfn = function(inst_)
-        if not inst_:HasTag("burnt") then
-            inst_.AnimState:PlayAnimation("open")
-            inst_.SoundEmitter:PlaySound("dontstarve/common/wardrobe_open")
-        end
-    end
-    inst.components.container.onclosefn = function(inst_)
-        if not inst_:HasTag("burnt") and inst_.AnimState:IsCurrentAnimation("open") then
-            inst_.AnimState:PlayAnimation("cancel")
-            inst_.SoundEmitter:PlaySound("dontstarve/common/wardrobe_close")
-        end
-    end
 end)

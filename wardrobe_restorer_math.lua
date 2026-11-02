@@ -96,26 +96,26 @@ function M.item_category(prefab, is_usage_fueled)
     return M.CATEGORY_TOOLS
 end
 
--- Whether the half-rate setting ("none", "all", or categories joined with
--- "+", e.g. "magical+tools") covers the given category.
-function M.half_rate_applies(selection, category)
-    if type(selection) ~= "string" or selection == "none" then
-        return false
-    end
+-- Parses the half-rate setting ("none", "all", or categories joined with
+-- "+", e.g. "magical+tools") into a set of categories. Done once at load so
+-- the repair step does not re-parse the string for every item.
+function M.parse_half_rate(selection)
+    local halved = {}
     if selection == "all" then
-        return true
-    end
-    for part in string.gmatch(selection, "[^+]+") do
-        if part == category then
-            return true
+        halved[M.CATEGORY_MAGICAL] = true
+        halved[M.CATEGORY_TOOLS] = true
+        halved[M.CATEGORY_CLOTHING] = true
+    elseif type(selection) == "string" then
+        for part in string.gmatch(selection, "[^+]+") do
+            halved[part] = true
         end
     end
-    return false
+    return halved
 end
 
--- Recovery rate multiplier for an item under the given half-rate setting.
-function M.rate_multiplier(selection, prefab, is_usage_fueled)
-    if M.half_rate_applies(selection, M.item_category(prefab, is_usage_fueled)) then
+-- Recovery rate multiplier for an item, given a parse_half_rate set.
+function M.rate_multiplier(halved, prefab, is_usage_fueled)
+    if halved[M.item_category(prefab, is_usage_fueled)] then
         return M.MAGIC_RATE_MULTIPLIER
     end
     return 1
