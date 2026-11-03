@@ -52,6 +52,9 @@ local function load_modmain(config)
             end,
             Vector3 = Vector3,
             TheSim = { GetScreenSize = function() return 1920, 1080 end },
+            RESOLUTION_X = 1280,
+            RESOLUTION_Y = 720,
+            pcall = pcall,
             TheWorld = { ismastersim = true },
             TUNING = { SEG_TIME = 30 },
             FUELTYPE = { USAGE = "USAGE" },
@@ -112,10 +115,11 @@ for _, num_slots in ipairs({ 4, 9, 16, 20, 25, 36, 49 }) do
     local params = containers.params.wardrobe
     check(params ~= nil, label .. "params registered under the wardrobe prefab name")
     check(params ~= nil and #params.widget.slotpos == num_slots, label .. "widget has one position per slot")
-    -- A HUD whose container root spans +/-half_height units on screen.
+    -- A HUD whose container root spans +/-half_height units on a 1920x1080
+    -- screen (proportional scale 720/1080, so 360 units at HUD scale 1).
     local function doer_with_screen(half_height)
         return { HUD = { controls = { containerroot = {
-            GetWorldScale = function() return { y = 1080 / 2 / half_height } end,
+            GetScale = function() return { y = 360 / half_height } end,
         } } } }
     end
     for _, half_height in ipairs({ 220, 360 }) do
@@ -130,8 +134,16 @@ for _, num_slots in ipairs({ 4, 9, 16, 20, 25, 36, 49 }) do
         check(#positions == num_slots and math.abs(positions[1].y - widget.slotpos[1].y * scale) < 1e-9,
             label .. "slot positions scale with the slots on a +/-" .. half_height .. " screen")
     end
-    check(params.widget.posfn(nil, nil).y == mathmod.fit_layout(mathmod.get_slot_layout(num_slots), 360),
+    local fallback_y = mathmod.fit_layout(mathmod.get_slot_layout(num_slots), 360)
+    check(params.widget.posfn(nil, nil).y == fallback_y,
         label .. "missing HUD falls back to a 720-unit screen")
+    -- Regression: an engine method missing behind a widget wrapper crashed
+    -- the game on open. Any failure while measuring must fall back instead.
+    local broken = { HUD = { controls = { containerroot = {
+        GetScale = function() error("attempt to call method 'GetScale' (a nil value)") end,
+    } } } }
+    local ok, pos = pcall(params.widget.posfn, nil, broken)
+    check(ok and pos.y == fallback_y, label .. "a failing HUD measurement falls back instead of crashing")
 
     local log = {}
     local inst = make_wardrobe(log)

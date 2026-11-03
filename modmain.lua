@@ -18,20 +18,23 @@ for _, point in ipairs(mathmod.build_grid(layout.num_slots, layout.cols, layout.
     table.insert(slotpos, Vector3(point.x, point.y, 0))
 end
 
--- Half the visible screen height in container HUD units. The container
--- root's world scale already includes the resolution scale mode and the
--- player's HUD size setting.
+-- Half the visible screen height in container HUD units: screen pixels to
+-- proportional HUD units (the same conversion vanilla screens use), divided
+-- by the container root's own scale (the player's HUD size setting).
+local function measure_screen_half_height(doer)
+    local root = doer.HUD.controls.containerroot
+    local w, h = GLOBAL.TheSim:GetScreenSize()
+    local propscale = math.max(GLOBAL.RESOLUTION_X / w, GLOBAL.RESOLUTION_Y / h)
+    return h / 2 * propscale / root:GetScale().y
+end
+
 local function screen_half_height(doer)
-    local hud = doer ~= nil and doer.HUD or nil
-    local root = hud ~= nil and hud.controls ~= nil and hud.controls.containerroot or nil
-    if root ~= nil then
-        local _, h = GLOBAL.TheSim:GetScreenSize()
-        local scale = root:GetWorldScale().y
-        if h > 0 and scale > 0 then
-            return h / 2 / scale
-        end
+    -- Layout must never crash the game: fall back to the 720-unit HUD at
+    -- scale 1 if anything is missing.
+    local ok, half_height = GLOBAL.pcall(measure_screen_half_height, doer)
+    if ok and type(half_height) == "number" and half_height > 0 and half_height < math.huge then
+        return half_height
     end
-    -- The HUD is at least 720 units tall at HUD scale 1.
     return 360
 end
 
