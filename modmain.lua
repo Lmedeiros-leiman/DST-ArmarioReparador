@@ -28,6 +28,7 @@ containers.params.wardrobe =
         animbank = layout.bank,
         animbuild = layout.bank,
         pos = Vector3(0, layout.pos_y, 0),
+        slotscale = layout.slotscale,
         side_align_tip = 160,
     },
     type = "chest",
