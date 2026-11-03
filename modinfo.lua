@@ -28,7 +28,7 @@ configuration_options =
     {
         name = "num_slots",
         label = "Slots",
-        hover = "Number of wardrobe slots. Above 20, the extra slots have no custom frame.",
+        hover = "Number of wardrobe slots.",
         options =
         {
             { description = "4 (2x2)", data = 4 },
