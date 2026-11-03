@@ -7,19 +7,20 @@ local M = {}
 M.SEGMENT_LENGTH_SECONDS = 30
 M.DAY_LENGTH_SECONDS = 480
 
--- The game ships backgrounds through 5x4 only. Larger grids reuse that
--- background and intentionally leave their extra slots unframed.
+-- The game ships backgrounds through 5x4 only. The square grids above that
+-- reuse the square ancient 4x4 frame, scaled evenly to the grid's width
+-- (the art spans 4 slots of 80 units).
 -- pos_y is the preferred position, just above the character's head.
--- M.fit_layout moves or shrinks a grid that does not fit the screen.
+-- M.fit_layout moves or shrinks a grid that does not fit there.
 local SLOT_LAYOUTS =
 {
     [4]  = { num_slots = 4,  cols = 2, spacing = 80, bank = "ui_chest_3x3",        pos_y = 200 },
     [9]  = { num_slots = 9,  cols = 3, spacing = 80, bank = "ui_chest_3x3",        pos_y = 200 },
     [16] = { num_slots = 16, cols = 4, spacing = 80, bank = "ui_boat_ancient_4x4", pos_y = 200 },
     [20] = { num_slots = 20, cols = 5, spacing = 75, bank = "ui_fish_box_5x4",     pos_y = 220 },
-    [25] = { num_slots = 25, cols = 5, spacing = 75, bank = "ui_fish_box_5x4",     pos_y = 230 },
-    [36] = { num_slots = 36, cols = 6, spacing = 75, bank = "ui_fish_box_5x4",     pos_y = 243 },
-    [49] = { num_slots = 49, cols = 7, spacing = 75, bank = "ui_fish_box_5x4",     pos_y = 265 },
+    [25] = { num_slots = 25, cols = 5, spacing = 75, bank = "ui_boat_ancient_4x4", pos_y = 230, bgscale = 5 * 75 / 320 },
+    [36] = { num_slots = 36, cols = 6, spacing = 75, bank = "ui_boat_ancient_4x4", pos_y = 243, bgscale = 6 * 75 / 320 },
+    [49] = { num_slots = 49, cols = 7, spacing = 75, bank = "ui_boat_ancient_4x4", pos_y = 265, bgscale = 7 * 75 / 320 },
 }
 
 -- ContainerWidget draws at this scale inside the HUD container root.
@@ -30,29 +31,41 @@ M.SLOT_SIZE = 68
 M.SCREEN_MARGIN = 5
 -- Room kept free at the bottom of the screen for the inventory bar.
 M.INVENTORY_BAR_HEIGHT = 150
+-- A grid placed beside the character is centered at this height (about the
+-- character's middle) and keeps this horizontal gap from screen center.
+M.BESIDE_CENTER_Y = 50
+M.CHARACTER_CLEARANCE = 80
 
--- Half the on-screen height of a layout's slots, in HUD units.
+-- Half the on-screen size of a layout's slots along one axis, in HUD units.
+local function half_extent(count, spacing)
+    return M.WIDGET_SCALE * ((count - 1) / 2 * spacing + M.SLOT_SIZE / 2)
+end
+
 function M.layout_half_height(layout)
-    local rows = math.ceil(layout.num_slots / layout.cols)
-    return M.WIDGET_SCALE * ((rows - 1) / 2 * layout.spacing + M.SLOT_SIZE / 2)
+    return half_extent(math.ceil(layout.num_slots / layout.cols), layout.spacing)
+end
+
+function M.layout_half_width(layout)
+    return half_extent(layout.cols, layout.spacing)
 end
 
 -- Fits a layout into a HUD whose visible area spans +/-screen_half_height
--- units. Keeps the preferred position when the grid fits there, otherwise
--- slides it down below the top edge, and only shrinks the slots when the
--- grid is taller than the room between the top edge and the inventory bar.
--- Returns the widget's y position and the slot scale.
-function M.fit_layout(layout, screen_half_height)
+-- units. Keeps the preferred spot above the character when the grid fits
+-- there. Otherwise the grid goes beside the character, on `side` (1 right,
+-- -1 left), and only shrinks when it is taller than the room between the top
+-- edge and the inventory bar. Returns the widget's x, y and the slot scale.
+function M.fit_layout(layout, screen_half_height, side)
     local top = screen_half_height - M.SCREEN_MARGIN
     local bottom = M.INVENTORY_BAR_HEIGHT - screen_half_height
     local half = M.layout_half_height(layout)
     if layout.pos_y + half <= top then
-        return layout.pos_y, 1
+        return 0, layout.pos_y, 1
     end
-    if top - 2 * half >= bottom then
-        return top - half, 1
-    end
-    return (top + bottom) / 2, (top - bottom) / (2 * half)
+    local scale = math.min(1, (top - bottom) / (2 * half))
+    half = half * scale
+    local y = math.max(bottom + half, math.min(M.BESIDE_CENTER_Y, top - half))
+    local x = (side or 1) * (M.layout_half_width(layout) * scale + M.CHARACTER_CLEARANCE)
+    return x, y, scale
 end
 
 local function is_positive(value)
@@ -171,6 +184,7 @@ function M.get_slot_layout(num_slots)
         spacing = layout.spacing,
         bank = layout.bank,
         pos_y = layout.pos_y,
+        bgscale = layout.bgscale,
     }
 end
 

@@ -174,42 +174,67 @@ do
     assert_eq(fallback.cols, 5, "unsupported slot count uses the 5x4 layout")
 end
 
--- Fitting grids on screen: move first, shrink only when moving is not enough.
+-- Fitting grids on screen: above the character when there is room, beside
+-- it otherwise, and shrunk only when the grid cannot fit at all.
 do
     local sizes = { 4, 9, 16, 20, 25, 36, 49 }
     -- HUD half heights: max HUD size (1.1), 16:9 at HUD scale 1, default
-    -- HUD size (0.925), and a taller 16:10 screen.
+    -- HUD size (0.925), and a taller 16:10 screen. The narrowest HUD is
+    -- 1280 units wide at proportional scale, so +/-640 at HUD scale 1.1.
+    local narrowest_half_width = 640 / 1.1
     for _, half_height in ipairs({ 327, 360, 389, 432 }) do
         for _, n in ipairs(sizes) do
-            local layout = M.get_slot_layout(n)
-            local y, scale = M.fit_layout(layout, half_height)
-            local half = M.layout_half_height(layout) * scale
-            local label = n .. " slots at +/-" .. half_height
-            assert_eq(scale, 1, label .. " fits without shrinking")
-            assert_true(y + half <= half_height - M.SCREEN_MARGIN + 1e-9, label .. " stays below the top edge")
-            assert_true(y - half >= M.INVENTORY_BAR_HEIGHT - half_height - 1e-9, label .. " stays above the inventory bar")
+            for _, side in ipairs({ 1, -1 }) do
+                local layout = M.get_slot_layout(n)
+                local x, y, scale = M.fit_layout(layout, half_height, side)
+                local half_h = M.layout_half_height(layout) * scale
+                local half_w = M.layout_half_width(layout) * scale
+                local label = n .. " slots at +/-" .. half_height .. " side " .. side
+                assert_eq(scale, 1, label .. " fits without shrinking")
+                assert_true(y + half_h <= half_height - M.SCREEN_MARGIN + 1e-9, label .. " stays below the top edge")
+                assert_true(y - half_h >= M.INVENTORY_BAR_HEIGHT - half_height - 1e-9, label .. " stays above the inventory bar")
+                assert_true(math.abs(x) + half_w <= narrowest_half_width, label .. " stays inside the screen width")
+                if x ~= 0 then
+                    assert_true(x * side > 0, label .. " goes on the requested side")
+                    assert_true(math.abs(x) - half_w >= M.CHARACTER_CLEARANCE - 1e-9, label .. " leaves the character visible")
+                end
+            end
         end
     end
 
-    -- Grids that fit at their preferred position are not moved.
-    local y = M.fit_layout(M.get_slot_layout(20), 360)
+    -- Grids that fit above the character stay centered there.
+    local x, y = M.fit_layout(M.get_slot_layout(20), 360, 1)
+    assert_eq(x, 0, "5x4 stays centered")
     assert_eq(y, 220, "5x4 keeps the vanilla fish box position")
-    y = M.fit_layout(M.get_slot_layout(49), 432)
+    x, y = M.fit_layout(M.get_slot_layout(49), 432, -1)
+    assert_eq(x, 0, "7x7 stays centered on a tall screen")
     assert_eq(y, 265, "7x7 keeps its preferred position on a tall screen")
 
-    -- A clipped grid slides down until its top edge is on screen.
+    -- A grid that does not fit above the character goes beside it.
     local layout = M.get_slot_layout(49)
-    y = M.fit_layout(layout, 360)
-    assert_near(y + M.layout_half_height(layout), 355, 1e-9, "7x7 slides down to the top edge")
+    x, y = M.fit_layout(layout, 360, 1)
+    assert_near(x, M.layout_half_width(layout) + M.CHARACTER_CLEARANCE, 1e-9, "7x7 goes right of the character")
+    assert_eq(y, M.BESIDE_CENTER_Y, "7x7 beside the character is centered on it")
+    x = M.fit_layout(layout, 360, -1)
+    assert_true(x < 0, "7x7 goes left when asked")
 
     -- Only a screen too short for the full grid shrinks the slots.
     local scale
-    y, scale = M.fit_layout(layout, 220)
+    x, y, scale = M.fit_layout(layout, 220, 1)
     assert_true(scale < 1, "7x7 shrinks when it cannot fit at full size")
     local half = M.layout_half_height(layout) * scale
     assert_near(y + half, 215, 1e-9, "shrunk grid touches the top margin")
     assert_near(y - half, M.INVENTORY_BAR_HEIGHT - 220, 1e-9, "shrunk grid touches the inventory bar")
+    assert_near(x, M.layout_half_width(layout) * scale + M.CHARACTER_CLEARANCE, 1e-9, "shrunk grid stays beside the character")
 end
+
+-- The square frame is scaled evenly to cover each square grid larger than 4x4.
+for _, n in ipairs({ 25, 36, 49 }) do
+    local layout = M.get_slot_layout(n)
+    assert_eq(layout.bank, "ui_boat_ancient_4x4", n .. " slots use the square frame")
+    assert_near(layout.bgscale * 4 * 80, layout.cols * layout.spacing, 1e-9, n .. " slots scale the frame to the grid width")
+end
+assert_eq(M.get_slot_layout(20).bgscale, nil, "vanilla-sized grids keep their frame scale")
 
 -- Grid generator must reproduce the exact vanilla layouts.
 do

@@ -38,8 +38,21 @@ local function screen_half_height(doer)
     return 360
 end
 
-local function fit(doer)
-    return mathmod.fit_layout(layout, screen_half_height(doer))
+-- 1 to place a grid right of the character, -1 for left: whichever side
+-- the wardrobe is not on, so it stays visible.
+local function measure_side(wardrobe, doer)
+    local wardrobe_x = GLOBAL.TheSim:GetScreenPos(wardrobe.Transform:GetWorldPosition())
+    local doer_x = GLOBAL.TheSim:GetScreenPos(doer.Transform:GetWorldPosition())
+    return wardrobe_x > doer_x and -1 or 1
+end
+
+local function side_away_from(wardrobe, doer)
+    local ok, side = GLOBAL.pcall(measure_side, wardrobe, doer)
+    return ok and side or 1
+end
+
+local function fit(wardrobe, doer)
+    return mathmod.fit_layout(layout, screen_half_height(doer), side_away_from(wardrobe, doer))
 end
 
 -- Clients set up the widget from the prefab name, so the params must be
@@ -53,13 +66,14 @@ containers.params.wardrobe =
         animbuild = layout.bank,
         pos = Vector3(0, layout.pos_y, 0),
         -- Evaluated when the widget opens, so the grid fits the current
-        -- screen: moved first, and shrunk only if it cannot fit otherwise.
+        -- screen: above the character when there is room, otherwise beside
+        -- it, and shrunk only if it cannot fit at all.
         posfn = function(container, doer)
-            local y = fit(doer)
-            return Vector3(0, y, 0)
+            local x, y = fit(container, doer)
+            return Vector3(x, y, 0)
         end,
         slotposfn = function(container, doer)
-            local _, scale = fit(doer)
+            local _, _, scale = fit(container, doer)
             if scale == 1 then
                 return slotpos
             end
@@ -70,8 +84,13 @@ containers.params.wardrobe =
             return scaled
         end,
         slotscalefn = function(container, doer)
-            local _, scale = fit(doer)
+            local _, _, scale = fit(container, doer)
             return scale
+        end,
+        -- Stretches the frame evenly over grids larger than its art.
+        bganim_visualfn = function(bganim, container, doer)
+            local _, _, scale = fit(container, doer)
+            bganim:SetScale((layout.bgscale or 1) * scale)
         end,
         side_align_tip = 160,
     },
