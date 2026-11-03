@@ -12,6 +12,12 @@ end
 local passed, failed = 0, 0
 local mathmod = dofile(mod_root .. "/wardrobe_restorer_math.lua")
 
+-- An entity whose world position maps to the given screen x (see the
+-- TheSim:GetScreenPos stub, which reads it back from world x).
+local function at_screen_x(screen_x)
+    return { Transform = { GetWorldPosition = function() return screen_x, 0, 0 end } }
+end
+
 -- Enough of DST's Vector3 for the widget code: construction and scaling.
 local vector3_mt = {}
 local function Vector3(x, y, z)
@@ -51,7 +57,10 @@ local function load_modmain(config)
                 return containers
             end,
             Vector3 = Vector3,
-            TheSim = { GetScreenSize = function() return 1920, 1080 end },
+            TheSim = {
+                GetScreenSize = function() return 1920, 1080 end,
+                GetScreenPos = function(_, x, y, z) return x, 540 end,
+            },
             RESOLUTION_X = 1280,
             RESOLUTION_Y = 720,
             pcall = pcall,
@@ -118,23 +127,34 @@ for _, num_slots in ipairs({ 4, 9, 16, 20, 25, 36, 49 }) do
     -- A HUD whose container root spans +/-half_height units on a 1920x1080
     -- screen (proportional scale 720/1080, so 360 units at HUD scale 1).
     local function doer_with_screen(half_height)
-        return { HUD = { controls = { containerroot = {
+        local doer = at_screen_x(960)
+        doer.HUD = { controls = { containerroot = {
             GetScale = function() return { y = 360 / half_height } end,
-        } } } }
+        } } }
+        return doer
     end
     for _, half_height in ipairs({ 220, 360 }) do
-        local doer = doer_with_screen(half_height)
-        local y, scale = mathmod.fit_layout(mathmod.get_slot_layout(num_slots), half_height)
-        local widget = params.widget
-        check(math.abs(widget.posfn(nil, doer).y - y) < 1e-9,
-            label .. "widget position fits a +/-" .. half_height .. " screen")
-        check(math.abs(widget.slotscalefn(nil, doer) - scale) < 1e-9,
-            label .. "slot scale fits a +/-" .. half_height .. " screen")
-        local positions = widget.slotposfn(nil, doer)
-        check(#positions == num_slots and math.abs(positions[1].y - widget.slotpos[1].y * scale) < 1e-9,
-            label .. "slot positions scale with the slots on a +/-" .. half_height .. " screen")
+        for _, wardrobe_screen_x in ipairs({ 1200, 700 }) do
+            local doer = doer_with_screen(half_height)
+            local wardrobe = at_screen_x(wardrobe_screen_x)
+            -- The doer stands at screen x 960, so the grid goes to the other side.
+            local side = wardrobe_screen_x > 960 and -1 or 1
+            local x, y, scale = mathmod.fit_layout(mathmod.get_slot_layout(num_slots), half_height, side)
+            local widget = params.widget
+            local where = " on a +/-" .. half_height .. " screen, wardrobe at x " .. wardrobe_screen_x
+            local pos = widget.posfn(wardrobe, doer)
+            check(math.abs(pos.x - x) < 1e-9 and math.abs(pos.y - y) < 1e-9, label .. "widget position fits" .. where)
+            check(math.abs(widget.slotscalefn(wardrobe, doer) - scale) < 1e-9, label .. "slot scale fits" .. where)
+            local positions = widget.slotposfn(wardrobe, doer)
+            check(#positions == num_slots and math.abs(positions[1].y - widget.slotpos[1].y * scale) < 1e-9,
+                label .. "slot positions scale with the slots" .. where)
+            local bganim = { SetScale = function(self, k) self.scale = k end }
+            widget.bganim_visualfn(bganim, wardrobe, doer)
+            local bgscale = mathmod.get_slot_layout(num_slots).bgscale or 1
+            check(math.abs(bganim.scale - bgscale * scale) < 1e-9, label .. "frame scales with the grid" .. where)
+        end
     end
-    local fallback_y = mathmod.fit_layout(mathmod.get_slot_layout(num_slots), 360)
+    local _, fallback_y = mathmod.fit_layout(mathmod.get_slot_layout(num_slots), 360, 1)
     check(params.widget.posfn(nil, nil).y == fallback_y,
         label .. "missing HUD falls back to a 720-unit screen")
     -- Regression: an engine method missing behind a widget wrapper crashed
