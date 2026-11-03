@@ -10,6 +10,7 @@ if mod_root == nil or mod_root == "" then
 end
 
 local passed, failed = 0, 0
+local mathmod = dofile(mod_root .. "/wardrobe_restorer_math.lua")
 
 local function check(cond, msg)
     if cond then
@@ -103,6 +104,8 @@ for _, num_slots in ipairs({ 4, 9, 16, 20, 25, 36, 49 }) do
     local params = containers.params.wardrobe
     check(params ~= nil, label .. "params registered under the wardrobe prefab name")
     check(params ~= nil and #params.widget.slotpos == num_slots, label .. "widget has one position per slot")
+    check(params ~= nil and params.widget.slotscale == mathmod.get_slot_layout(num_slots).slotscale,
+        label .. "widget uses the layout's slot scale")
 
     local log = {}
     local inst = make_wardrobe(log)

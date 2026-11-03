@@ -169,6 +169,14 @@ do
         assert_eq(#grid, case.slots, case.label .. " builds every slot")
     end
 
+    -- Every grid stays on screen and above the character's head. The HUD is
+    -- +/-360 units tall; the head reaches about +100 (measured in game).
+    for _, case in ipairs(cases) do
+        local bottom, top = M.layout_screen_extent(M.get_slot_layout(case.requested))
+        assert_true(top <= 355, case.label .. " fits below the top of the screen")
+        assert_true(bottom >= 105, case.label .. " stays above the character")
+    end
+
     local fallback = M.get_slot_layout(24)
     assert_eq(fallback.num_slots, 20, "unsupported slot count falls back to 20")
     assert_eq(fallback.cols, 5, "unsupported slot count uses the 5x4 layout")
