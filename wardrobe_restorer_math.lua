@@ -9,8 +9,8 @@ M.DAY_LENGTH_SECONDS = 480
 
 -- The game ships backgrounds through 5x4 only. Larger grids reuse that
 -- background and intentionally leave their extra slots unframed.
--- Grids must fit between the character's head and the top of the screen
--- (see M.layout_screen_extent). 6x6 and 7x7 only fit with smaller slots.
+-- pos_y is the preferred position, just above the character's head.
+-- M.fit_layout moves or shrinks a grid that does not fit the screen.
 local SLOT_LAYOUTS =
 {
     [4]  = { num_slots = 4,  cols = 2, spacing = 80, bank = "ui_chest_3x3",        pos_y = 200 },
@@ -18,21 +18,41 @@ local SLOT_LAYOUTS =
     [16] = { num_slots = 16, cols = 4, spacing = 80, bank = "ui_boat_ancient_4x4", pos_y = 200 },
     [20] = { num_slots = 20, cols = 5, spacing = 75, bank = "ui_fish_box_5x4",     pos_y = 220 },
     [25] = { num_slots = 25, cols = 5, spacing = 75, bank = "ui_fish_box_5x4",     pos_y = 230 },
-    [36] = { num_slots = 36, cols = 6, spacing = 68, bank = "ui_fish_box_5x4",     pos_y = 230, slotscale = 0.9 },
-    [49] = { num_slots = 49, cols = 7, spacing = 58, bank = "ui_fish_box_5x4",     pos_y = 230, slotscale = 0.78 },
+    [36] = { num_slots = 36, cols = 6, spacing = 75, bank = "ui_fish_box_5x4",     pos_y = 243 },
+    [49] = { num_slots = 49, cols = 7, spacing = 75, bank = "ui_fish_box_5x4",     pos_y = 265 },
 }
 
--- ContainerWidget draws at this scale inside a HUD root centered on the
--- screen, whose height is always at least 720 units (+/-360).
+-- ContainerWidget draws at this scale inside the HUD container root.
 M.WIDGET_SCALE = 0.6
--- Width of an inventory slot in widget units at slotscale 1.
+-- Width of an inventory slot in widget units at slot scale 1.
 M.SLOT_SIZE = 68
+-- Gap kept between the grid and the top edge of the screen, in HUD units.
+M.SCREEN_MARGIN = 5
+-- Room kept free at the bottom of the screen for the inventory bar.
+M.INVENTORY_BAR_HEIGHT = 150
 
--- Bottom and top screen y of a layout's slot edges, in HUD units.
-function M.layout_screen_extent(layout)
+-- Half the on-screen height of a layout's slots, in HUD units.
+function M.layout_half_height(layout)
     local rows = math.ceil(layout.num_slots / layout.cols)
-    local half = (rows - 1) / 2 * layout.spacing + M.SLOT_SIZE * (layout.slotscale or 1) / 2
-    return layout.pos_y - M.WIDGET_SCALE * half, layout.pos_y + M.WIDGET_SCALE * half
+    return M.WIDGET_SCALE * ((rows - 1) / 2 * layout.spacing + M.SLOT_SIZE / 2)
+end
+
+-- Fits a layout into a HUD whose visible area spans +/-screen_half_height
+-- units. Keeps the preferred position when the grid fits there, otherwise
+-- slides it down below the top edge, and only shrinks the slots when the
+-- grid is taller than the room between the top edge and the inventory bar.
+-- Returns the widget's y position and the slot scale.
+function M.fit_layout(layout, screen_half_height)
+    local top = screen_half_height - M.SCREEN_MARGIN
+    local bottom = M.INVENTORY_BAR_HEIGHT - screen_half_height
+    local half = M.layout_half_height(layout)
+    if layout.pos_y + half <= top then
+        return layout.pos_y, 1
+    end
+    if top - 2 * half >= bottom then
+        return top - half, 1
+    end
+    return (top + bottom) / 2, (top - bottom) / (2 * half)
 end
 
 local function is_positive(value)
@@ -151,7 +171,6 @@ function M.get_slot_layout(num_slots)
         spacing = layout.spacing,
         bank = layout.bank,
         pos_y = layout.pos_y,
-        slotscale = layout.slotscale,
     }
 end
 

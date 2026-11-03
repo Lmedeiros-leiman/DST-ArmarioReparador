@@ -12,6 +12,13 @@ end
 local passed, failed = 0, 0
 local mathmod = dofile(mod_root .. "/wardrobe_restorer_math.lua")
 
+-- Enough of DST's Vector3 for the widget code: construction and scaling.
+local vector3_mt = {}
+local function Vector3(x, y, z)
+    return setmetatable({ x = x, y = y, z = z }, vector3_mt)
+end
+vector3_mt.__mul = function(v, k) return Vector3(v.x * k, v.y * k, v.z * k) end
+
 local function check(cond, msg)
     if cond then
         passed = passed + 1
@@ -43,7 +50,8 @@ local function load_modmain(config)
                 assert(name == "containers", "unexpected require " .. name)
                 return containers
             end,
-            Vector3 = function(x, y, z) return { x = x, y = y, z = z } end,
+            Vector3 = Vector3,
+            TheSim = { GetScreenSize = function() return 1920, 1080 end },
             TheWorld = { ismastersim = true },
             TUNING = { SEG_TIME = 30 },
             FUELTYPE = { USAGE = "USAGE" },
@@ -104,8 +112,26 @@ for _, num_slots in ipairs({ 4, 9, 16, 20, 25, 36, 49 }) do
     local params = containers.params.wardrobe
     check(params ~= nil, label .. "params registered under the wardrobe prefab name")
     check(params ~= nil and #params.widget.slotpos == num_slots, label .. "widget has one position per slot")
-    check(params ~= nil and params.widget.slotscale == mathmod.get_slot_layout(num_slots).slotscale,
-        label .. "widget uses the layout's slot scale")
+    -- A HUD whose container root spans +/-half_height units on screen.
+    local function doer_with_screen(half_height)
+        return { HUD = { controls = { containerroot = {
+            GetWorldScale = function() return { y = 1080 / 2 / half_height } end,
+        } } } }
+    end
+    for _, half_height in ipairs({ 220, 360 }) do
+        local doer = doer_with_screen(half_height)
+        local y, scale = mathmod.fit_layout(mathmod.get_slot_layout(num_slots), half_height)
+        local widget = params.widget
+        check(math.abs(widget.posfn(nil, doer).y - y) < 1e-9,
+            label .. "widget position fits a +/-" .. half_height .. " screen")
+        check(math.abs(widget.slotscalefn(nil, doer) - scale) < 1e-9,
+            label .. "slot scale fits a +/-" .. half_height .. " screen")
+        local positions = widget.slotposfn(nil, doer)
+        check(#positions == num_slots and math.abs(positions[1].y - widget.slotpos[1].y * scale) < 1e-9,
+            label .. "slot positions scale with the slots on a +/-" .. half_height .. " screen")
+    end
+    check(params.widget.posfn(nil, nil).y == mathmod.fit_layout(mathmod.get_slot_layout(num_slots), 360),
+        label .. "missing HUD falls back to a 720-unit screen")
 
     local log = {}
     local inst = make_wardrobe(log)

@@ -18,6 +18,27 @@ for _, point in ipairs(mathmod.build_grid(layout.num_slots, layout.cols, layout.
     table.insert(slotpos, Vector3(point.x, point.y, 0))
 end
 
+-- Half the visible screen height in container HUD units. The container
+-- root's world scale already includes the resolution scale mode and the
+-- player's HUD size setting.
+local function screen_half_height(doer)
+    local hud = doer ~= nil and doer.HUD or nil
+    local root = hud ~= nil and hud.controls ~= nil and hud.controls.containerroot or nil
+    if root ~= nil then
+        local _, h = GLOBAL.TheSim:GetScreenSize()
+        local scale = root:GetWorldScale().y
+        if h > 0 and scale > 0 then
+            return h / 2 / scale
+        end
+    end
+    -- The HUD is at least 720 units tall at HUD scale 1.
+    return 360
+end
+
+local function fit(doer)
+    return mathmod.fit_layout(layout, screen_half_height(doer))
+end
+
 -- Clients set up the widget from the prefab name, so the params must be
 -- keyed by "wardrobe" or the client gets no widget and crashes on open.
 containers.params.wardrobe =
@@ -28,7 +49,27 @@ containers.params.wardrobe =
         animbank = layout.bank,
         animbuild = layout.bank,
         pos = Vector3(0, layout.pos_y, 0),
-        slotscale = layout.slotscale,
+        -- Evaluated when the widget opens, so the grid fits the current
+        -- screen: moved first, and shrunk only if it cannot fit otherwise.
+        posfn = function(container, doer)
+            local y = fit(doer)
+            return Vector3(0, y, 0)
+        end,
+        slotposfn = function(container, doer)
+            local _, scale = fit(doer)
+            if scale == 1 then
+                return slotpos
+            end
+            local scaled = {}
+            for i, v in ipairs(slotpos) do
+                scaled[i] = v * scale
+            end
+            return scaled
+        end,
+        slotscalefn = function(container, doer)
+            local _, scale = fit(doer)
+            return scale
+        end,
         side_align_tip = 160,
     },
     type = "chest",
