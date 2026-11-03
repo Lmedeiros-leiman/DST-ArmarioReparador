@@ -1,7 +1,7 @@
 name = "Wardrobe Storage and Repair"
 description = [[Turns the wardrobe into a 20 slot chest that slowly repairs the equipment stored inside. Right click opens the storage, left click still changes skins.]]
 author = "Frytura"
-version = "1.2.2"
+version = "1.2.1"
 
 forumthread = ""
 
@@ -28,7 +28,7 @@ configuration_options =
     {
         name = "num_slots",
         label = "Slots",
-        hover = "Number of wardrobe slots. Above 20, the extra slots have no custom frame. 6x6 and 7x7 use smaller slots so they fit on screen.",
+        hover = "Number of wardrobe slots. Above 20, the extra slots have no custom frame.",
         options =
         {
             { description = "4 (2x2)", data = 4 },
