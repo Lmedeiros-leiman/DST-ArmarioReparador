@@ -69,7 +69,11 @@ local function load_modmain(config)
             TheWorld = { ismastersim = true },
             TUNING = { SEG_TIME = 30 },
             FUELTYPE = { USAGE = "USAGE" },
-            ACTIONS = { CHANGEIN = "CHANGEIN" },
+            -- CHANGEIN keeps vanilla's strfn so the hover label can be checked.
+            ACTIONS = { CHANGEIN = { strfn = function(act)
+                return act.target ~= nil and act.target:HasTag("dressable") and "DRESSUP" or nil
+            end } },
+            STRINGS = { ACTIONS = { CHANGEIN = { GENERIC = "Use", DRESSUP = "Dress Up" } } },
         },
         GetModConfigData = function(name) return config[name] end,
         AddComponentAction = function(actiontype, component, fn)
@@ -87,7 +91,7 @@ local function load_modmain(config)
     local chunk = assert(loadfile(mod_root .. "/modmain.lua"))
     setfenv(chunk, env)
     chunk()
-    return containers, postinits, collectors
+    return containers, postinits, collectors, env.GLOBAL
 end
 
 -- Minimal server-side wardrobe with the vanilla hammer callback.
@@ -186,7 +190,7 @@ do
     -- Vanilla's container collector already offers RUMMAGE on both clicks,
     -- so left click must add nothing and right click must add CHANGEIN,
     -- which outranks RUMMAGE.
-    local _, _, collectors = load_modmain({ num_slots = 20 })
+    local _, _, collectors, G = load_modmain({ num_slots = 20 })
     local collect = collectors["SCENE/container"]
     local function wardrobe_replica(tags, can_open)
         local inst = { tags = tags, replica = { container = {
@@ -206,12 +210,23 @@ do
     check(collect ~= nil, "a container scene collector is registered")
     check(#actions_for(wardrobe, doer, false) == 0, "left click leaves the wardrobe to RUMMAGE (storage)")
     local right = actions_for(wardrobe, doer, true)
-    check(#right == 1 and right[1] == "CHANGEIN", "right click offers CHANGEIN (skin menu)")
+    check(#right == 1 and right[1] == G.ACTIONS.CHANGEIN, "right click offers CHANGEIN (skin menu)")
     check(#actions_for(wardrobe_replica({}, true), doer, true) == 0, "other containers are untouched")
     check(#actions_for(wardrobe_replica({ wardrobe_restorer = true, burnt = true }, true), doer, true) == 0,
         "burnt wardrobes offer no skin menu")
     local rider = { replica = { inventory = {}, rider = { IsRiding = function() return true end } } }
     check(#actions_for(wardrobe, rider, true) == 0, "no skin menu while riding")
+
+    -- The hover shows "<right mouse button>: <label>", so name what it opens.
+    local changein = G.ACTIONS.CHANGEIN
+    local function label(target)
+        local key = changein.strfn({ target = target }) or "GENERIC"
+        return G.STRINGS.ACTIONS.CHANGEIN[key]
+    end
+    check(label(wardrobe) == "Change Skins", "right click hover reads Change Skins on the wardrobe")
+    check(label(wardrobe_replica({ dressable = true }, true)) == "Dress Up", "mannequins keep Dress Up")
+    check(label(wardrobe_replica({}, true)) == "Use", "other CHANGEIN targets keep the vanilla label")
+    check(label(nil) == "Use", "a missing target keeps the vanilla label")
 end
 
 -- Stored item with one durability component. The stubs clamp at the maximum

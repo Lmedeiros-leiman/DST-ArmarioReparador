@@ -130,6 +130,18 @@ AddComponentAction("SCENE", "container", function(inst, doer, actions, right)
     table.insert(actions, GLOBAL.ACTIONS.CHANGEIN)
 end)
 
+-- The hover reads "<right mouse button>: Use" for CHANGEIN, which does not
+-- say what opens. Name the skin menu on this wardrobe only; other targets
+-- keep the vanilla label (mannequins still read "Dress Up").
+GLOBAL.STRINGS.ACTIONS.CHANGEIN.WARDROBE_SKINS = "Change Skins"
+local changein_strfn = GLOBAL.ACTIONS.CHANGEIN.strfn
+GLOBAL.ACTIONS.CHANGEIN.strfn = function(act)
+    if act.target ~= nil and act.target:HasTag("wardrobe_restorer") then
+        return "WARDROBE_SKINS"
+    end
+    return changein_strfn ~= nil and changein_strfn(act) or nil
+end
+
 local function recover_items_in(inst, dt)
     -- Burning removes the container, which also ends the repairs.
     local container = inst.components.container
