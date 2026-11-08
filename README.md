@@ -1,6 +1,6 @@
 # DST Armario Reparador
 
-Mod para Don't Starve Together que transforma o armario vanilla em armazenamento para equipamento danificado. O clique esquerdo continua abrindo a troca de skin e o clique direito abre os slots do armario.
+Mod para Don't Starve Together que transforma o armario vanilla em armazenamento para equipamento danificado. O clique esquerdo abre os slots do armario e o clique direito abre a troca de skin.
 
 ## O que ele faz
 

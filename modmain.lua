@@ -1,7 +1,7 @@
 -- Wardrobe Storage and Repair
 -- Adds chest storage to the vanilla wardrobe and slowly restores the
--- durability of items stored inside. Left click keeps the skin-change menu,
--- right click opens the storage.
+-- durability of items stored inside. Left click opens the storage, right
+-- click opens the skin-change menu.
 
 modimport("wardrobe_restorer_math.lua")
 local mathmod = wardrobe_restorer_math
@@ -114,10 +114,10 @@ containers.params.wardrobe =
 containers.MAXITEMSLOTS = math.max(containers.MAXITEMSLOTS, layout.num_slots)
 
 -- The built-in container collector already adds RUMMAGE on both click sides.
--- On left clicks we also offer CHANGEIN, which has the higher priority, so
--- left click resolves to the skin menu and right click resolves to RUMMAGE.
+-- On right clicks we also offer CHANGEIN, which has the higher priority, so
+-- left click resolves to RUMMAGE and right click resolves to the skin menu.
 AddComponentAction("SCENE", "container", function(inst, doer, actions, right)
-    if right
+    if not right
         or not inst:HasTag("wardrobe_restorer")
         or inst:HasTag("burnt")
         or inst.replica.container == nil
@@ -129,6 +129,18 @@ AddComponentAction("SCENE", "container", function(inst, doer, actions, right)
     end
     table.insert(actions, GLOBAL.ACTIONS.CHANGEIN)
 end)
+
+-- The hover reads "<right mouse button>: Use" for CHANGEIN, which does not
+-- say what opens. Name the skin menu on this wardrobe only; other targets
+-- keep the vanilla label (mannequins still read "Dress Up").
+GLOBAL.STRINGS.ACTIONS.CHANGEIN.WARDROBE_SKINS = "Change Skins"
+local changein_strfn = GLOBAL.ACTIONS.CHANGEIN.strfn
+GLOBAL.ACTIONS.CHANGEIN.strfn = function(act)
+    if act.target ~= nil and act.target:HasTag("wardrobe_restorer") then
+        return "WARDROBE_SKINS"
+    end
+    return changein_strfn ~= nil and changein_strfn(act) or nil
+end
 
 local function recover_items_in(inst, dt)
     -- Burning removes the container, which also ends the repairs.
