@@ -1,7 +1,7 @@
 -- Wardrobe Storage and Repair
 -- Adds chest storage to the vanilla wardrobe and slowly restores the
--- durability of items stored inside. Left click keeps the skin-change menu,
--- right click opens the storage.
+-- durability of items stored inside. Left click opens the storage, right
+-- click opens the skin-change menu.
 
 modimport("wardrobe_restorer_math.lua")
 local mathmod = wardrobe_restorer_math
@@ -114,10 +114,10 @@ containers.params.wardrobe =
 containers.MAXITEMSLOTS = math.max(containers.MAXITEMSLOTS, layout.num_slots)
 
 -- The built-in container collector already adds RUMMAGE on both click sides.
--- On left clicks we also offer CHANGEIN, which has the higher priority, so
--- left click resolves to the skin menu and right click resolves to RUMMAGE.
+-- On right clicks we also offer CHANGEIN, which has the higher priority, so
+-- left click resolves to RUMMAGE and right click resolves to the skin menu.
 AddComponentAction("SCENE", "container", function(inst, doer, actions, right)
-    if right
+    if not right
         or not inst:HasTag("wardrobe_restorer")
         or inst:HasTag("burnt")
         or inst.replica.container == nil

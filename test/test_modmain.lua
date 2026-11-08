@@ -1,6 +1,7 @@
 -- Regression tests for modmain.lua against a stubbed DST mod environment.
 -- Covers the crash fixes (slot netvar capacity above 20 slots, the client
--- widget lookup by prefab name, dropping contents when hammered) and the
+-- widget lookup by prefab name, dropping contents when hammered), the click
+-- mapping (left opens storage, right opens the skin menu) and the
 -- repair step itself.
 -- Run from the mod root: lua5.1 test/test_modmain.lua
 
@@ -40,6 +41,7 @@ local VANILLA_MAXITEMSLOTS = 20
 local function load_modmain(config)
     local containers = { MAXITEMSLOTS = VANILLA_MAXITEMSLOTS, params = {} }
     local postinits = {}
+    local collectors = {}
 
     local env = {
         pairs = pairs,
@@ -67,10 +69,12 @@ local function load_modmain(config)
             TheWorld = { ismastersim = true },
             TUNING = { SEG_TIME = 30 },
             FUELTYPE = { USAGE = "USAGE" },
-            ACTIONS = { CHANGEIN = {} },
+            ACTIONS = { CHANGEIN = "CHANGEIN" },
         },
         GetModConfigData = function(name) return config[name] end,
-        AddComponentAction = function() end,
+        AddComponentAction = function(actiontype, component, fn)
+            collectors[actiontype .. "/" .. component] = fn
+        end,
         AddPrefabPostInit = function(prefab, fn) postinits[prefab] = fn end,
     }
     env.env = env
@@ -83,7 +87,7 @@ local function load_modmain(config)
     local chunk = assert(loadfile(mod_root .. "/modmain.lua"))
     setfenv(chunk, env)
     chunk()
-    return containers, postinits
+    return containers, postinits, collectors
 end
 
 -- Minimal server-side wardrobe with the vanilla hammer callback.
@@ -176,6 +180,38 @@ for _, num_slots in ipairs({ 4, 9, 16, 20, 25, 36, 49 }) do
     inst.components.workable.onfinish(inst, {})
     check(log[1] == "drop" and log[2] == "vanilla_onfinish",
         label .. "hammering drops contents before the vanilla collapse")
+end
+
+do
+    -- Vanilla's container collector already offers RUMMAGE on both clicks,
+    -- so left click must add nothing and right click must add CHANGEIN,
+    -- which outranks RUMMAGE.
+    local _, _, collectors = load_modmain({ num_slots = 20 })
+    local collect = collectors["SCENE/container"]
+    local function wardrobe_replica(tags, can_open)
+        local inst = { tags = tags, replica = { container = {
+            CanBeOpened = function() return can_open end,
+        } } }
+        function inst:HasTag(tag) return self.tags[tag] == true end
+        return inst
+    end
+    local doer = { replica = { inventory = {} } }
+    local function actions_for(inst, who, right)
+        local actions = {}
+        collect(inst, who, actions, right)
+        return actions
+    end
+    local wardrobe = wardrobe_replica({ wardrobe_restorer = true }, true)
+
+    check(collect ~= nil, "a container scene collector is registered")
+    check(#actions_for(wardrobe, doer, false) == 0, "left click leaves the wardrobe to RUMMAGE (storage)")
+    local right = actions_for(wardrobe, doer, true)
+    check(#right == 1 and right[1] == "CHANGEIN", "right click offers CHANGEIN (skin menu)")
+    check(#actions_for(wardrobe_replica({}, true), doer, true) == 0, "other containers are untouched")
+    check(#actions_for(wardrobe_replica({ wardrobe_restorer = true, burnt = true }, true), doer, true) == 0,
+        "burnt wardrobes offer no skin menu")
+    local rider = { replica = { inventory = {}, rider = { IsRiding = function() return true end } } }
+    check(#actions_for(wardrobe, rider, true) == 0, "no skin menu while riding")
 end
 
 -- Stored item with one durability component. The stubs clamp at the maximum
