@@ -95,6 +95,64 @@ end
 -- the configured rate.
 M.MAGIC_RATE_MULTIPLIER = 0.5
 
+-- Item categories. Each has an "allow_<name>" setting; the half-rate
+-- setting covers magical, tools and clothing only.
+M.CATEGORY_REFILLABLE = "refillable"
+M.CATEGORY_KIT = "kit"
+M.CATEGORY_BOSS = "boss"
+M.CATEGORY_ANCIENT = "ancient"
+M.CATEGORY_MAGICAL = "magical"
+M.CATEGORY_LIGHT = "light"
+M.CATEGORY_CLOTHING = "clothing"
+M.CATEGORY_TOOLS = "tools"
+
+-- Precedence order: an item belongs to the first category that matches.
+M.CATEGORIES =
+{
+    M.CATEGORY_REFILLABLE,
+    M.CATEGORY_KIT,
+    M.CATEGORY_BOSS,
+    M.CATEGORY_ANCIENT,
+    M.CATEGORY_MAGICAL,
+    M.CATEGORY_LIGHT,
+    M.CATEGORY_CLOTHING,
+    M.CATEGORY_TOOLS,
+}
+
+-- Kit gear is recognized by its forgerepairable component (Brightshade,
+-- Void cloth, W.A.R.B.I.S.). Dreadstone has no kit but heals itself, so it
+-- is listed by name.
+M.KIT_ITEMS =
+{
+    armordreadstone = true,
+    dreadstonehat = true,
+}
+
+-- Dropped by a boss or crafted from a boss drop.
+M.BOSS_ITEMS =
+{
+    armorskeleton = true,    -- Ancient Fuelweaver
+    skeletonhat = true,      -- Ancient Fuelweaver
+    shieldofterror = true,   -- Eye of Terror
+    eyemaskhat = true,       -- Eye of Terror
+    armordragonfly = true,   -- Dragonfly
+    beargervest = true,      -- Bearger
+    eyebrellahat = true,     -- Deerclops
+    hivehat = true,          -- Bee Queen
+    antlionhat = true,       -- Antlion
+    staff_tornado = true,    -- Moose/Goose
+    spiderhat = true,        -- Spider Queen
+    alterguardianhat = true, -- Celestial Champion
+}
+
+-- Thulecite armor and weapons. Ancient staffs and amulets stay magical.
+M.ANCIENT_ITEMS =
+{
+    ruinshat = true,
+    armorruins = true,
+    ruins_bat = true,
+}
+
 -- Prefab names of magical, non-clothing items with durability. The Lazy
 -- Forager (orangeamulet) is intentionally left out: it is niche enough
 -- that it always counts as an ordinary tool.
@@ -107,9 +165,6 @@ M.MAGIC_ITEMS =
     armor_sanity = true,
     batbat = true,
     armorslurper = true,
-    antlionhat = true,
-    armordreadstone = true,
-    dreadstonehat = true,
     pocketwatch_weapon = true,
     amulet = true,
     blueamulet = true,
@@ -126,17 +181,59 @@ M.MAGIC_ITEMS =
     opalstaff = true,
 }
 
--- Item categories used by the half-rate setting.
-M.CATEGORY_MAGICAL = "magical"
-M.CATEGORY_TOOLS = "tools"
-M.CATEGORY_CLOTHING = "clothing"
+-- Light sources by name: the torch and Morning Star burn the default fuel
+-- type, which compasses and fans share, so fuel alone cannot tell them apart.
+M.LIGHT_ITEMS =
+{
+    torch = true,
+    nightstick = true,
+    lighter = true,
+    lantern = true,
+    minerhat = true,
+    molehat = true,
+    redlantern = true,
+    yots_redlantern = true,
+}
 
--- Classifies an item: magical items by prefab name, clothing by usage fuel
--- (hats, vests and other sewable gear), everything else (tools, weapons,
--- armor, lanterns) as tools.
-function M.item_category(prefab, is_usage_fueled)
-    if type(prefab) == "string" and M.MAGIC_ITEMS[prefab] then
+-- Fuel types only lights use. Catches modded lights by their fuel.
+M.LIGHT_FUELTYPES =
+{
+    CAVE = true,
+    WORMLIGHT = true,
+    LIGHTER = true,
+}
+
+-- Items accepted although they are not equippable.
+M.STORABLE_EXTRAS =
+{
+    panflute = true,
+}
+
+-- Classifies an item into the first matching category of M.CATEGORIES.
+-- `traits` holds what the prefab name cannot tell: fillable (refills like a
+-- watering can), kit (repaired with a forge kit) and light_fuel (burns a
+-- light-only fuel). Clothing is anything on usage fuel (sewable gear);
+-- everything else (tools, weapons, armor) is a tool.
+function M.item_category(prefab, is_usage_fueled, traits)
+    traits = traits or {}
+    local known = type(prefab) == "string"
+    if traits.fillable then
+        return M.CATEGORY_REFILLABLE
+    end
+    if traits.kit or (known and M.KIT_ITEMS[prefab]) then
+        return M.CATEGORY_KIT
+    end
+    if known and M.BOSS_ITEMS[prefab] then
+        return M.CATEGORY_BOSS
+    end
+    if known and M.ANCIENT_ITEMS[prefab] then
+        return M.CATEGORY_ANCIENT
+    end
+    if known and M.MAGIC_ITEMS[prefab] then
         return M.CATEGORY_MAGICAL
+    end
+    if traits.light_fuel or (known and M.LIGHT_ITEMS[prefab]) then
+        return M.CATEGORY_LIGHT
     end
     if is_usage_fueled == true then
         return M.CATEGORY_CLOTHING
@@ -161,17 +258,35 @@ function M.parse_half_rate(selection)
     return halved
 end
 
--- Recovery rate multiplier for an item, given a parse_half_rate set.
-function M.rate_multiplier(halved, prefab, is_usage_fueled)
-    if halved[M.item_category(prefab, is_usage_fueled)] then
+-- Recovery rate multiplier for a category, given a parse_half_rate set.
+function M.category_multiplier(halved, category)
+    if halved[category] then
         return M.MAGIC_RATE_MULTIPLIER
     end
     return 1
 end
 
--- Storage filter: equipment may be stored, perishables may not.
-function M.accepts_item(is_equippable, is_perishable)
-    return is_equippable == true and is_perishable ~= true
+-- Recovery rate multiplier for an item, given a parse_half_rate set.
+function M.rate_multiplier(halved, prefab, is_usage_fueled, traits)
+    return M.category_multiplier(halved, M.item_category(prefab, is_usage_fueled, traits))
+end
+
+-- Reads the "allow_<category>" settings through `get` (GetModConfigData).
+-- Anything but false allows the category, so configs saved before the
+-- settings existed keep every category.
+function M.parse_allowed(get)
+    local allowed = {}
+    for _, category in ipairs(M.CATEGORIES) do
+        allowed[category] = get("allow_" .. category) ~= false
+    end
+    return allowed
+end
+
+-- Storage filter: equipment (plus the listed extras) may be stored,
+-- perishables may not.
+function M.accepts_item(is_equippable, is_perishable, prefab)
+    local storable = is_equippable == true or (type(prefab) == "string" and M.STORABLE_EXTRAS[prefab] == true)
+    return storable and is_perishable ~= true
 end
 
 -- Returns the supported UI specification for a configuration value. A copy
