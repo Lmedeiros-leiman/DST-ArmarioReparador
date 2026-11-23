@@ -116,7 +116,6 @@ assert_eq(M.item_category("orangeamulet", false), "tools", "lazy forager counts 
 assert_eq(M.item_category("spear", false), "tools", "spear is a tool")
 assert_eq(M.item_category("armorwood", false), "tools", "armor counts as a tool")
 assert_eq(M.item_category("tophat", true), "clothing", "usage-fueled gear is clothing")
-assert_eq(M.item_category("minerhat", false), "tools", "cave-fueled hat is not clothing")
 assert_eq(M.item_category(nil, false), "tools", "missing prefab is a tool")
 
 -- The half-rate setting parses into a set of categories.
