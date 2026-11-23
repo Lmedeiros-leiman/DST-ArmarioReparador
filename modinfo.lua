@@ -1,7 +1,9 @@
 name = "Wardrobe Storage and Repair"
-description = [[Turns the wardrobe into a 20 slot chest that slowly repairs the equipment stored inside. Left click opens the storage, right click changes skins.]]
+description = [[Turns the wardrobe into a chest (20 slots by default) that slowly repairs the equipment stored inside. Left click opens the storage, right click changes skins. Each item category can be allowed or refused in the config.
+
+Warning: disabling this mod deletes everything stored in wardrobes. Empty them first.]]
 author = "Frytura"
-version = "1.3.1"
+version = "1.4.0"
 
 forumthread = ""
 
@@ -22,6 +24,21 @@ server_filter_tags =
     "wardrobe",
     "storage",
 }
+
+-- One Yes/No toggle per item category; modmain reads "allow_<category>".
+local function allow(category, label, hover)
+    return {
+        name = "allow_" .. category,
+        label = label,
+        hover = hover .. " When No, these items cannot be stored and stored ones stop repairing.",
+        options =
+        {
+            { description = "Yes", data = true },
+            { description = "No", data = false },
+        },
+        default = true,
+    }
+end
 
 configuration_options =
 {
@@ -82,7 +99,7 @@ configuration_options =
     {
         name = "half_rate",
         label = "Half speed",
-        hover = "Categories that recover at half the configured rate. Magical: staffs, amulets, pan flute, shadow gear (the Lazy Forager counts as a tool). Tools: tools, weapons and armor. Clothing: sewable items. Ignored when repair is disabled.",
+        hover = "Categories that recover at half the configured rate. Magical: staffs, amulets, pan flute, shadow gear (the Lazy Forager counts as a tool). Tools: tools, weapons and armor. Clothing: sewable items. Ancient, boss, kit, light and refillable items always recover at full speed. Ignored when repair is disabled.",
         options =
         {
             { description = "None", data = "none" },
@@ -96,4 +113,18 @@ configuration_options =
         },
         default = "magical",
     },
+    {
+        name = "allowed_header",
+        label = "Allowed items",
+        options = { { description = "", data = 0 } },
+        default = 0,
+    },
+    allow("tools", "Tools, weapons & armor", "Axes, pickaxes, spears, log suits, football helmets and anything not in another category."),
+    allow("clothing", "Clothing", "Sewable hats, vests and other gear that wears out with use."),
+    allow("magical", "Magical", "Staffs (ancient ones included), amulets, night armor, dark sword, bat bat, one-man band and the pan flute."),
+    allow("ancient", "Ancient (Thulecite)", "Thulecite crown, suit and club."),
+    allow("boss", "Boss gear", "Dropped by a boss or made from a boss drop: Bone Armor and Helm, Shield of Terror, Eye Mask, Scalemail, Hibearnation Vest, Eyebrella, Bee Queen Crown, Turf-Raiser Helm, Weather Pain, Spiderhat, Enlightened Crown."),
+    allow("kit", "Kit gear", "Brightshade, Void cloth and W.A.R.B.I.S. gear (normally fixed with a repair kit), plus Dreadstone (heals itself)."),
+    allow("light", "Light sources", "Torch, Morning Star, lighter, lantern, miner hat, moggles and red lantern."),
+    allow("refillable", "Refillable", "Watering cans and other items that are refilled rather than repaired."),
 }
