@@ -286,6 +286,18 @@ do
     check(ok, "a burnt wardrobe (container removed) skips repairs")
 end
 
+do
+    -- Disabled repair leaves a plain storage wardrobe: no repair step at all.
+    local containers, postinits = load_modmain({ num_slots = 20, enable_repair = false, recovery_rate = 10 })
+    local log = {}
+    local inst = make_wardrobe(log)
+    postinits.wardrobe(inst)
+
+    check(log.task == nil, "disabled repair schedules no repair task")
+    check(inst.OnLongUpdate == nil, "disabled repair skips catch-up repairs")
+    check(log.widget == "wardrobe" and containers.params.wardrobe ~= nil, "disabled repair keeps the storage")
+end
+
 print(passed .. "/" .. (passed + failed) .. " modmain tests passed")
 if failed > 0 then
     os.exit(1)

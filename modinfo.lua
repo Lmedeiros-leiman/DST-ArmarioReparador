@@ -1,7 +1,7 @@
 name = "Wardrobe Storage and Repair"
 description = [[Turns the wardrobe into a 20 slot chest that slowly repairs the equipment stored inside. Left click opens the storage, right click changes skins.]]
 author = "Frytura"
-version = "1.3.0"
+version = "1.3.1"
 
 forumthread = ""
 
@@ -41,10 +41,29 @@ configuration_options =
         },
         default = 20,
     },
+    -- DST's config screen cannot hide options, so the repair settings sit
+    -- under their own header right below the toggle.
+    {
+        name = "repair_header",
+        label = "Repair",
+        options = { { description = "", data = 0 } },
+        default = 0,
+    },
+    {
+        name = "enable_repair",
+        label = "Enable repair?",
+        hover = "Slowly repair equipment stored in the wardrobe. When disabled the wardrobe is storage only and the repair options below are ignored.",
+        options =
+        {
+            { description = "Yes", data = true },
+            { description = "No", data = false },
+        },
+        default = true,
+    },
     {
         name = "recovery_rate",
         label = "Recovery (%/day)",
-        hover = "Durability recovered per day. 5% takes an item from 0% to 100% in 20 days.",
+        hover = "Durability recovered per day. 5% takes an item from 0% to 100% in 20 days. Ignored when repair is disabled.",
         options =
         {
             { description = "1% (100 days)", data = 1 },
@@ -63,7 +82,7 @@ configuration_options =
     {
         name = "half_rate",
         label = "Half speed",
-        hover = "Categories that recover at half the configured rate. Magical: staffs, amulets, pan flute, shadow gear (the Lazy Forager counts as a tool). Tools: tools, weapons and armor. Clothing: sewable items.",
+        hover = "Categories that recover at half the configured rate. Magical: staffs, amulets, pan flute, shadow gear (the Lazy Forager counts as a tool). Tools: tools, weapons and armor. Clothing: sewable items. Ignored when repair is disabled.",
         options =
         {
             { description = "None", data = "none" },
