@@ -10,6 +10,8 @@ local containers = GLOBAL.require("containers")
 local Vector3 = GLOBAL.Vector3
 
 local layout = mathmod.get_slot_layout(GetModConfigData("num_slots"))
+-- Missing (configs saved before the toggle existed) means enabled.
+local repair_enabled = GetModConfigData("enable_repair") ~= false
 local recovery_rate = GetModConfigData("recovery_rate") or 5
 local halved = mathmod.parse_half_rate(GetModConfigData("half_rate") or "magical")
 
@@ -200,8 +202,10 @@ AddPrefabPostInit("wardrobe", function(inst)
     container.onclosefn = inst.components.wardrobe.onclosefn
 
     -- One repair step per day segment (16 per day) rather than every second.
-    inst:DoPeriodicTask(mathmod.SEGMENT_LENGTH_SECONDS, recover_items_in, nil, mathmod.SEGMENT_LENGTH_SECONDS)
-    inst.OnLongUpdate = recover_items_in
+    if repair_enabled then
+        inst:DoPeriodicTask(mathmod.SEGMENT_LENGTH_SECONDS, recover_items_in, nil, mathmod.SEGMENT_LENGTH_SECONDS)
+        inst.OnLongUpdate = recover_items_in
+    end
 
     -- The vanilla hammer callback only drops the recipe loot, which would
     -- delete everything stored inside.

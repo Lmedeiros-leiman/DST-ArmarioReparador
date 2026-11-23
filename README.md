@@ -11,6 +11,7 @@ Mod para Don't Starve Together que transforma o armario vanilla em armazenamento
 - Permite configurar 2x2, 3x3, 4x4, 5x4, 5x5, 6x6 ou 7x7. O padrao e 5x4, com 20 slots.
 - O DST tem arte nativa ate 5x4. As grades 5x5, 6x6 e 7x7 usam a moldura quadrada 4x4 ampliada. Quando a grade nao cabe acima do personagem, ela abre ao lado dele, no lado oposto ao armario.
 - Permite configurar a taxa de recuperacao entre 1% e 20% por dia DST. O padrao e 5% por dia.
+- Permite desativar o reparo ("Enable repair?"). Desativado, o armario vira apenas armazenamento e as opcoes de reparo sao ignoradas. O padrao e ativado.
 
 ## Instalacao local
 
