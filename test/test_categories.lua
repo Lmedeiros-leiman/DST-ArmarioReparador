@@ -163,7 +163,9 @@ local function load_modmain(config)
     local containers = { MAXITEMSLOTS = 20, params = {} }
     local postinits, collectors = {}, {}
     local env = {
-        pairs = pairs, ipairs = ipairs, next = next, print = function() end,
+        -- Same Lua globals as DST's mod environment (mods.lua CreateEnvironment):
+        -- no `next`, so modmain must reach it through GLOBAL.
+        pairs = pairs, ipairs = ipairs, print = function() end,
         math = math, table = table, type = type, string = string, tostring = tostring,
         MODROOT = mod_root .. "/",
         GLOBAL = {
@@ -172,6 +174,7 @@ local function load_modmain(config)
             TheSim = { GetScreenSize = function() return 1920, 1080 end, GetScreenPos = function(_, x) return x, 540 end },
             RESOLUTION_X = 1280, RESOLUTION_Y = 720,
             pcall = pcall,
+            next = next,
             TheWorld = { ismastersim = true },
             TUNING = { SEG_TIME = 30 },
             FUELTYPE = FUELTYPE,
