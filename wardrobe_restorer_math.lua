@@ -121,9 +121,12 @@ M.CATEGORIES =
     M.CATEGORY_TOOLS,
 }
 
--- Categories that recover at half rate unless their setting says otherwise.
+-- Categories that recover at half rate unless their setting says otherwise:
+-- magic, and the strongest gear (boss drops and kit gear).
 M.HALF_RATE_DEFAULTS =
 {
+    [M.CATEGORY_KIT] = true,
+    [M.CATEGORY_BOSS] = true,
     [M.CATEGORY_ANCIENT_MAGIC] = true,
     [M.CATEGORY_MAGICAL] = true,
 }

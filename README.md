@@ -11,7 +11,7 @@ Mod para Don't Starve Together que transforma o armario vanilla em armazenamento
 - Separa os itens em categorias. Cada uma tem tres opcoes na configuracao ("Item categories"):
   - "Store <categoria>": se a categoria pode ser guardada. Padrao: sim. Recusada, ela nao entra no armario, e os itens dela que ja estavam guardados param de ser reparados.
   - "Repair <categoria>": se a categoria e reparada. Padrao: sim. So vale com "Enable repair?" ativado.
-  - "Half rate <categoria>": se a categoria recupera na metade da taxa. Padrao: sim para Magicos e Magia antiga, nao para as outras.
+  - "Half rate <categoria>": se a categoria recupera na metade da taxa. Padrao: sim para Magicos, Magia antiga, Equipamento de chefe e Equipamento de kit, nao para as outras.
 - Um item fica na primeira categoria que se aplica, nesta ordem:
   1. Recarregaveis: regadores e outros itens que se reabastecem em vez de reparar.
   2. Equipamento de kit: Brightshade, Void cloth e W.A.R.B.I.S. (consertados com kit de reparo), mais Dreadstone (se regenera sozinho).

@@ -134,19 +134,28 @@ check("missing settings store and repair every category", function()
     end
     return true
 end)
-check("missing half-rate settings halve magical and ancient magic only", function()
+-- Half rate by default: magic and the strongest gear (boss, kit).
+local HALF_BY_DEFAULT = { magical = true, ancient_magic = true, boss = true, kit = true }
+check("missing half-rate settings halve magical, ancient magic, boss and kit gear only", function()
     local s = settings({})
     for _, name in ipairs(M.CATEGORIES) do
-        local expected = name == "magical" or name == "ancient_magic"
-        if s[name].half ~= expected then return false end
+        if s[name].half ~= (HALF_BY_DEFAULT[name] == true) then return false end
     end
     return true
 end)
 check("full speed by default for tools", function()
     return M.category_rate(settings({}), "tools", 10) == 10
 end)
-check("half speed by default for magical", function()
-    return M.category_rate(settings({}), "magical", 10) == 5
+check("full speed by default for Thulecite gear", function()
+    return M.category_rate(settings({}), "ancient", 10) == 10
+end)
+for _, name in ipairs({ "magical", "boss", "kit" }) do
+    check("half speed by default for " .. name, function()
+        return M.category_rate(settings({}), name, 10) == 5
+    end)
+end
+check("halfrate_boss set to No restores full speed", function()
+    return M.category_rate(settings({ halfrate_boss = false }), "boss", 10) == 10
 end)
 check("halfrate_tools halves tools", function()
     return M.category_rate(settings({ halfrate_tools = true }), "tools", 10) == 5
@@ -195,7 +204,7 @@ do
         check("modinfo has repair_" .. name .. " defaulting to Yes", function()
             return yes_no("repair_" .. name, true)
         end)
-        local half = name == "magical" or name == "ancient_magic"
+        local half = HALF_BY_DEFAULT[name] == true
         check("modinfo has halfrate_" .. name .. " defaulting to " .. (half and "Yes" or "No"), function()
             return yes_no("halfrate_" .. name, half)
         end)
