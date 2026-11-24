@@ -55,6 +55,15 @@ end)
 check("a modded forge-repairable item is kit gear", function()
     return category("modded_blade", false, { kit = true }) == "kit"
 end)
+-- forgerepairable_<material> is only tagged while the item is damaged, so
+-- clients need the kit prefabs by name to agree with the server.
+for _, prefab in ipairs({ "armor_lunarplant", "lunarplanthat", "sword_lunarplant", "pickaxe_lunarplant",
+    "shovel_lunarplant", "staff_lunarplant", "armor_voidcloth", "voidclothhat", "voidcloth_scythe",
+    "voidcloth_boomerang", "voidcloth_umbrella", "shadow_battleaxe", "armorwagpunk", "wagpunkhat" }) do
+    check(prefab .. " is kit gear by name", function()
+        return category(prefab, false, {}) == "kit"
+    end)
+end
 for _, prefab in ipairs({ "armordreadstone", "dreadstonehat" }) do
     check(prefab .. " (self-repairing) is kit gear", function()
         return category(prefab, false, {}) == "kit"
@@ -286,6 +295,10 @@ check("client: clothing stays allowed when only tools are off", function()
 end)
 check("client: a modded cave-fueled lamp follows the light toggle", function()
     return not accepts({ allow_light = false }, client_item("modded_lamp", { CAVE_fueled = true }), false)
+end)
+check("client: undamaged kit gear (no repair tag) follows the kit toggle", function()
+    return not accepts({ allow_kit = false }, client_item("sword_lunarplant", {}), false)
+        and accepts({ allow_tools = false }, client_item("sword_lunarplant", {}), false)
 end)
 check("client: the pan flute is accepted", function()
     return accepts({}, client_item("panflute", {}, false), false)
