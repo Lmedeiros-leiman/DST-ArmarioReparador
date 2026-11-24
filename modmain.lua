@@ -13,7 +13,62 @@ local layout = mathmod.get_slot_layout(GetModConfigData("num_slots"))
 -- Missing (configs saved before the toggle existed) means enabled.
 local repair_enabled = GetModConfigData("enable_repair") ~= false
 local recovery_rate = GetModConfigData("recovery_rate") or 5
-local halved = mathmod.parse_half_rate(GetModConfigData("half_rate") or "magical")
+local settings = mathmod.parse_category_settings(GetModConfigData)
+
+-- What the prefab name cannot tell about an item, read from its components
+-- on the server. Returns the traits for mathmod.item_category and whether
+-- the item runs on usage fuel (sewable clothing).
+local function server_traits(item)
+    local comps = item.components
+    local fueltype = comps.fueled ~= nil and comps.fueled.fueltype or nil
+    return {
+        fillable = comps.fillable ~= nil,
+        kit = comps.forgerepairable ~= nil,
+        light_fuel = fueltype ~= nil and mathmod.LIGHT_FUELTYPES[fueltype] == true,
+    }, fueltype == GLOBAL.FUELTYPE.USAGE
+end
+
+-- The same traits on a client, from the tags those components network:
+-- "fillable", "forgerepairable_<material>" (only while damaged, hence the
+-- kit name list), "<FUELTYPE>_fueled" (fuel that accepts refueling) and
+-- "needssewing" (usage fuel, only while damaged).
+local function client_traits(item)
+    local kit = false
+    for _, material in pairs(GLOBAL.FORGEMATERIALS) do
+        if item:HasTag("forgerepairable_" .. material) then
+            kit = true
+            break
+        end
+    end
+    local light_fuel = false
+    for fueltype in pairs(mathmod.LIGHT_FUELTYPES) do
+        if item:HasTag(fueltype .. "_fueled") then
+            light_fuel = true
+            break
+        end
+    end
+    return {
+        fillable = item:HasTag("fillable"),
+        kit = kit,
+        light_fuel = light_fuel,
+    }, item:HasTag("needssewing")
+end
+
+local function category_of(item, traits_fn)
+    local traits, usage = traits_fn(item)
+    return mathmod.item_category(item.prefab, usage, traits)
+end
+
+-- Full-durability clothing carries no fuel tag, so a client sees it as a
+-- tool. Accept a "tool" if either category is stored and let the server,
+-- which reads the components, refuse it: a refused move just bounces back,
+-- while a client refusing what the server allows would block the item.
+local function client_stores(category)
+    if category == mathmod.CATEGORY_TOOLS then
+        return settings[mathmod.CATEGORY_TOOLS].store or settings[mathmod.CATEGORY_CLOTHING].store
+    end
+    return settings[category].store
+end
 
 local slotpos = {}
 for _, point in ipairs(mathmod.build_grid(layout.num_slots, layout.cols, layout.spacing)) do
@@ -97,16 +152,21 @@ containers.params.wardrobe =
         side_align_tip = 160,
     },
     type = "chest",
-    -- Equipment only, nothing that rots. Server path checks components
-    -- (authoritative); client path checks the replica and networked tags,
-    -- same pattern the vanilla fish box uses.
+    -- Equipment only (plus the pan flute), nothing that rots, and only from
+    -- allowed categories. The server checks components (authoritative);
+    -- clients check replicas and networked tags, same pattern the vanilla
+    -- fish box uses.
     itemtestfn = function(container, item, slot)
-        if item.components ~= nil and item.components.equippable ~= nil then
-            return mathmod.accepts_item(true, item.components.perishable ~= nil)
+        if GLOBAL.TheWorld.ismastersim then
+            local comps = item.components
+            return mathmod.accepts_item(comps.equippable ~= nil, comps.perishable ~= nil, item.prefab)
+                and settings[category_of(item, server_traits)].store
         end
         return mathmod.accepts_item(
             item.replica ~= nil and item.replica.equippable ~= nil,
-            item:HasTag("show_spoilage"))
+            item:HasTag("show_spoilage"),
+            item.prefab)
+            and client_stores(category_of(item, client_traits))
     end,
 }
 
@@ -122,6 +182,7 @@ AddComponentAction("SCENE", "container", function(inst, doer, actions, right)
     if not right
         or not inst:HasTag("wardrobe_restorer")
         or inst:HasTag("burnt")
+        or inst:HasTag("fire")
         or inst.replica.container == nil
         or not inst.replica.container:CanBeOpened()
         or doer.replica.inventory == nil
@@ -152,12 +213,11 @@ local function recover_items_in(inst, dt)
     end
     for _, item in pairs(container.slots) do
         local comps = item.components
-        -- Items that rot never recover (and should not be stored anyway).
-        if comps.perishable == nil then
+        -- Items that rot never recover (and should not be stored anyway);
+        -- a category that is not stored or not repaired gets rate 0.
+        local rate = mathmod.category_rate(settings, category_of(item, server_traits), recovery_rate)
+        if comps.perishable == nil and rate > 0 then
             local fueled = comps.fueled
-            -- Selected categories recover at a fraction of the configured rate.
-            local rate = recovery_rate * mathmod.rate_multiplier(halved, item.prefab,
-                fueled ~= nil and fueled.fueltype == GLOBAL.FUELTYPE.USAGE)
             -- Each component clamps at its maximum. Full items are skipped so
             -- they do not push percentusedchange on every step.
             local finiteuses = comps.finiteuses
@@ -197,9 +257,28 @@ AddPrefabPostInit("wardrobe", function(inst)
     local container = inst.components.container
     container:WidgetSetup("wardrobe")
 
-    -- Same open/close feedback the wardrobe uses while changing skins.
-    container.onopenfn = inst.components.wardrobe.onopenfn
-    container.onclosefn = inst.components.wardrobe.onclosefn
+    -- Storage and the skin menu share the wardrobe's open/close animation:
+    -- each side plays it only while the other is not in use, so one player
+    -- closing storage does not close the wardrobe on someone changing skins.
+    local wardrobe = inst.components.wardrobe
+    local vanilla_open, vanilla_close = wardrobe.onopenfn, wardrobe.onclosefn
+    local function skins_in_use()
+        return GLOBAL.next(wardrobe.changers) ~= nil
+    end
+    local function storage_in_use()
+        return container:IsOpen()
+    end
+    local function feedback(play, other_in_use)
+        return function(inst_, ...)
+            if play ~= nil and not other_in_use() then
+                play(inst_, ...)
+            end
+        end
+    end
+    container.onopenfn = feedback(vanilla_open, skins_in_use)
+    container.onclosefn = feedback(vanilla_close, skins_in_use)
+    wardrobe.onopenfn = feedback(vanilla_open, storage_in_use)
+    wardrobe.onclosefn = feedback(vanilla_close, storage_in_use)
 
     -- One repair step per day segment (16 per day) rather than every second.
     if repair_enabled then

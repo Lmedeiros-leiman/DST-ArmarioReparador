@@ -1,7 +1,9 @@
 name = "Wardrobe Storage and Repair"
-description = [[Turns the wardrobe into a 20 slot chest that slowly repairs the equipment stored inside. Left click opens the storage, right click changes skins.]]
+description = [[Turns the wardrobe into a chest (20 slots by default) that slowly repairs the equipment stored inside. Left click opens the storage, right click changes skins. Each item category can be stored, repaired and slowed down separately in the config.
+
+Warning: disabling this mod deletes everything stored in wardrobes. Empty them first.]]
 author = "Frytura"
-version = "1.3.1"
+version = "1.4.0"
 
 forumthread = ""
 
@@ -22,6 +24,39 @@ server_filter_tags =
     "wardrobe",
     "storage",
 }
+
+-- Yes/No option. modinfo runs in a sandbox without Lua's standard library
+-- (modindex.lua InitializeModInfo), so the per-category options below are
+-- spelled out instead of generated in a loop.
+local function yes_no(name, label, hover, default)
+    return {
+        name = name,
+        label = label,
+        hover = hover,
+        options =
+        {
+            { description = "Yes", data = true },
+            { description = "No", data = false },
+        },
+        default = default,
+    }
+end
+
+-- modmain reads "store_<category>", "repair_<category>" and "halfrate_<category>".
+local function store(category, label, contents)
+    return yes_no("store_" .. category, "Store " .. label,
+        contents .. " No: these items cannot be stored, and ones already stored stop repairing.", true)
+end
+
+local function repair(category, label)
+    return yes_no("repair_" .. category, "Repair " .. label,
+        "Repair stored " .. label .. ". No effect when Enable repair? is No or Store " .. label .. " is No.", true)
+end
+
+local function half_rate(category, label, default)
+    return yes_no("halfrate_" .. category, "Half rate " .. label,
+        label .. " recover at half the Recovery rate. No effect unless " .. label .. " are repaired.", default)
+end
 
 configuration_options =
 {
@@ -52,7 +87,7 @@ configuration_options =
     {
         name = "enable_repair",
         label = "Enable repair?",
-        hover = "Slowly repair equipment stored in the wardrobe. When disabled the wardrobe is storage only and the repair options below are ignored.",
+        hover = "Slowly repair equipment stored in the wardrobe. When No, the wardrobe is storage only and every Recovery, Repair and Half rate option is ignored.",
         options =
         {
             { description = "Yes", data = true },
@@ -80,20 +115,36 @@ configuration_options =
         default = 5,
     },
     {
-        name = "half_rate",
-        label = "Half speed",
-        hover = "Categories that recover at half the configured rate. Magical: staffs, amulets, pan flute, shadow gear (the Lazy Forager counts as a tool). Tools: tools, weapons and armor. Clothing: sewable items. Ignored when repair is disabled.",
-        options =
-        {
-            { description = "None", data = "none" },
-            { description = "Magical", data = "magical" },
-            { description = "Tools", data = "tools" },
-            { description = "Clothing", data = "clothing" },
-            { description = "Magical + tools", data = "magical+tools" },
-            { description = "Magical + clothing", data = "magical+clothing" },
-            { description = "Tools + clothing", data = "tools+clothing" },
-            { description = "All", data = "all" },
-        },
-        default = "magical",
+        name = "categories_header",
+        label = "Item categories",
+        options = { { description = "", data = 0 } },
+        default = 0,
     },
+    store("tools", "Tools", "Tools, weapons and armor: axes, pickaxes, spears, log suits, football helmets and anything not in another category."),
+    repair("tools", "Tools"),
+    half_rate("tools", "Tools", false),
+    store("clothing", "Clothing", "Sewable hats, vests and other gear that wears out with use."),
+    repair("clothing", "Clothing"),
+    half_rate("clothing", "Clothing", false),
+    store("magical", "Magical", "Fire, ice and telelocator staffs, amulets, night armor, dark sword, bat bat, one-man band, Alarming Clock and the pan flute."),
+    repair("magical", "Magical"),
+    half_rate("magical", "Magical", true),
+    store("ancient_magic", "Ancient magic", "Ancient tab staffs and amulets: Deconstruction Staff, Lazy Explorer, Star Caller's Staff, Moon Caller's Staff, Construction Amulet, Magiluminescence and Lazy Forager."),
+    repair("ancient_magic", "Ancient magic"),
+    half_rate("ancient_magic", "Ancient magic", true),
+    store("ancient", "Ancient gear", "Thulecite crown, suit and club."),
+    repair("ancient", "Ancient gear"),
+    half_rate("ancient", "Ancient gear", false),
+    store("boss", "Boss gear", "Dropped by a boss or made from a boss drop: Bone Armor and Helm, Shield of Terror, Eye Mask, Scalemail, Hibearnation Vest, Eyebrella, Bee Queen Crown, Turf-Raiser Helm, Weather Pain, Spiderhat, Enlightened Crown."),
+    repair("boss", "Boss gear"),
+    half_rate("boss", "Boss gear", true),
+    store("kit", "Kit gear", "Brightshade, Void cloth and W.A.R.B.I.S. gear (normally fixed with a repair kit), plus Dreadstone (heals itself)."),
+    repair("kit", "Kit gear"),
+    half_rate("kit", "Kit gear", true),
+    store("light", "Lights", "Torch, Morning Star, lighter, lantern, miner hat, moggles and red lantern."),
+    repair("light", "Lights"),
+    half_rate("light", "Lights", false),
+    store("refillable", "Refillables", "Watering cans and other items that are refilled rather than repaired."),
+    repair("refillable", "Refillables"),
+    half_rate("refillable", "Refillables", false),
 }

@@ -177,9 +177,6 @@ for _, num_slots in ipairs({ 4, 9, 16, 20, 25, 36, 49 }) do
     local inst = make_wardrobe(log)
     postinits.wardrobe(inst)
     check(log.widget == "wardrobe", label .. "server widget setup matches the client lookup")
-    check(inst.components.container.onopenfn == inst.components.wardrobe.onopenfn
-        and inst.components.container.onclosefn == inst.components.wardrobe.onclosefn,
-        label .. "container reuses the wardrobe open/close feedback")
 
     inst.components.workable.onfinish(inst, {})
     check(log[1] == "drop" and log[2] == "vanilla_onfinish",

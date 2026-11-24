@@ -91,25 +91,109 @@ function M.recover(current, max_amount, rate_per_day, dt, day_length)
     return next_value
 end
 
--- Categories selected by the half-rate setting recover at this fraction of
--- the configured rate.
-M.MAGIC_RATE_MULTIPLIER = 0.5
+-- Categories set to half rate recover at this fraction of the configured
+-- rate.
+M.HALF_RATE_MULTIPLIER = 0.5
 
--- Prefab names of magical, non-clothing items with durability. The Lazy
--- Forager (orangeamulet) is intentionally left out: it is niche enough
--- that it always counts as an ordinary tool.
+-- Item categories. Each has "store_<name>", "repair_<name>" and
+-- "halfrate_<name>" settings.
+M.CATEGORY_REFILLABLE = "refillable"
+M.CATEGORY_KIT = "kit"
+M.CATEGORY_BOSS = "boss"
+M.CATEGORY_ANCIENT = "ancient"
+M.CATEGORY_ANCIENT_MAGIC = "ancient_magic"
+M.CATEGORY_MAGICAL = "magical"
+M.CATEGORY_LIGHT = "light"
+M.CATEGORY_CLOTHING = "clothing"
+M.CATEGORY_TOOLS = "tools"
+
+-- Precedence order: an item belongs to the first category that matches.
+M.CATEGORIES =
+{
+    M.CATEGORY_REFILLABLE,
+    M.CATEGORY_KIT,
+    M.CATEGORY_BOSS,
+    M.CATEGORY_ANCIENT,
+    M.CATEGORY_ANCIENT_MAGIC,
+    M.CATEGORY_MAGICAL,
+    M.CATEGORY_LIGHT,
+    M.CATEGORY_CLOTHING,
+    M.CATEGORY_TOOLS,
+}
+
+-- Categories that recover at half rate unless their setting says otherwise:
+-- magic, and the strongest gear (boss drops and kit gear).
+M.HALF_RATE_DEFAULTS =
+{
+    [M.CATEGORY_KIT] = true,
+    [M.CATEGORY_BOSS] = true,
+    [M.CATEGORY_ANCIENT_MAGIC] = true,
+    [M.CATEGORY_MAGICAL] = true,
+}
+
+-- Kit gear: fixed with a repair kit (Brightshade, Void cloth, W.A.R.B.I.S.),
+-- plus Dreadstone, which has no kit but heals itself. Listed by name because
+-- the game only tags forgerepairable_<material> while an item is damaged,
+-- so clients could not tell undamaged kit gear apart. The kit trait still
+-- catches modded kit gear.
+M.KIT_ITEMS =
+{
+    -- Brightshade
+    armor_lunarplant = true,
+    lunarplanthat = true,
+    sword_lunarplant = true,
+    pickaxe_lunarplant = true,
+    shovel_lunarplant = true,
+    staff_lunarplant = true,
+    -- Void cloth
+    armor_voidcloth = true,
+    voidclothhat = true,
+    voidcloth_scythe = true,
+    voidcloth_boomerang = true,
+    voidcloth_umbrella = true,
+    shadow_battleaxe = true,
+    -- W.A.R.B.I.S.
+    armorwagpunk = true,
+    wagpunkhat = true,
+    -- Dreadstone
+    armordreadstone = true,
+    dreadstonehat = true,
+}
+
+-- Dropped by a boss or crafted from a boss drop.
+M.BOSS_ITEMS =
+{
+    armorskeleton = true,    -- Ancient Fuelweaver
+    skeletonhat = true,      -- Ancient Fuelweaver
+    shieldofterror = true,   -- Eye of Terror
+    eyemaskhat = true,       -- Eye of Terror
+    armordragonfly = true,   -- Dragonfly
+    beargervest = true,      -- Bearger
+    eyebrellahat = true,     -- Deerclops
+    hivehat = true,          -- Bee Queen
+    antlionhat = true,       -- Antlion
+    staff_tornado = true,    -- Moose/Goose
+    spiderhat = true,        -- Spider Queen
+    alterguardianhat = true, -- Celestial Champion
+}
+
+-- Thulecite armor and weapons. Ancient staffs and amulets stay magical.
+M.ANCIENT_ITEMS =
+{
+    ruinshat = true,
+    armorruins = true,
+    ruins_bat = true,
+}
+
+-- Prefab names of magical, non-clothing items with durability.
 M.MAGIC_ITEMS =
 {
-    -- Magic tab
     panflute = true,
     onemanband = true,
     nightsword = true,
     armor_sanity = true,
     batbat = true,
     armorslurper = true,
-    antlionhat = true,
-    armordreadstone = true,
-    dreadstonehat = true,
     pocketwatch_weapon = true,
     amulet = true,
     blueamulet = true,
@@ -117,26 +201,76 @@ M.MAGIC_ITEMS =
     firestaff = true,
     icestaff = true,
     telestaff = true,
-    -- Ancient tab
-    greenamulet = true,
-    yellowamulet = true,
+}
+
+-- Magic from the Ancient tab: staffs and amulets.
+M.ANCIENT_MAGIC_ITEMS =
+{
     greenstaff = true,
     orangestaff = true,
     yellowstaff = true,
     opalstaff = true,
+    greenamulet = true,
+    yellowamulet = true,
+    orangeamulet = true,
 }
 
--- Item categories used by the half-rate setting.
-M.CATEGORY_MAGICAL = "magical"
-M.CATEGORY_TOOLS = "tools"
-M.CATEGORY_CLOTHING = "clothing"
+-- Light sources by name: the torch and Morning Star burn the default fuel
+-- type, which compasses and fans share, so fuel alone cannot tell them apart.
+M.LIGHT_ITEMS =
+{
+    torch = true,
+    nightstick = true,
+    lighter = true,
+    lantern = true,
+    minerhat = true,
+    molehat = true,
+    redlantern = true,
+    yots_redlantern = true,
+}
 
--- Classifies an item: magical items by prefab name, clothing by usage fuel
--- (hats, vests and other sewable gear), everything else (tools, weapons,
--- armor, lanterns) as tools.
-function M.item_category(prefab, is_usage_fueled)
-    if type(prefab) == "string" and M.MAGIC_ITEMS[prefab] then
+-- Fuel types only lights use. Catches modded lights by their fuel.
+M.LIGHT_FUELTYPES =
+{
+    CAVE = true,
+    WORMLIGHT = true,
+    LIGHTER = true,
+}
+
+-- Items accepted although they are not equippable.
+M.STORABLE_EXTRAS =
+{
+    panflute = true,
+}
+
+-- Classifies an item into the first matching category of M.CATEGORIES.
+-- `traits` holds what the prefab name cannot tell: fillable (refills like a
+-- watering can), kit (repaired with a forge kit) and light_fuel (burns a
+-- light-only fuel). Clothing is anything on usage fuel (sewable gear);
+-- everything else (tools, weapons, armor) is a tool.
+function M.item_category(prefab, is_usage_fueled, traits)
+    traits = traits or {}
+    local known = type(prefab) == "string"
+    if traits.fillable then
+        return M.CATEGORY_REFILLABLE
+    end
+    if traits.kit or (known and M.KIT_ITEMS[prefab]) then
+        return M.CATEGORY_KIT
+    end
+    if known and M.BOSS_ITEMS[prefab] then
+        return M.CATEGORY_BOSS
+    end
+    if known and M.ANCIENT_ITEMS[prefab] then
+        return M.CATEGORY_ANCIENT
+    end
+    if known and M.ANCIENT_MAGIC_ITEMS[prefab] then
+        return M.CATEGORY_ANCIENT_MAGIC
+    end
+    if known and M.MAGIC_ITEMS[prefab] then
         return M.CATEGORY_MAGICAL
+    end
+    if traits.light_fuel or (known and M.LIGHT_ITEMS[prefab]) then
+        return M.CATEGORY_LIGHT
     end
     if is_usage_fueled == true then
         return M.CATEGORY_CLOTHING
@@ -144,34 +278,41 @@ function M.item_category(prefab, is_usage_fueled)
     return M.CATEGORY_TOOLS
 end
 
--- Parses the half-rate setting ("none", "all", or categories joined with
--- "+", e.g. "magical+tools") into a set of categories. Done once at load so
--- the repair step does not re-parse the string for every item.
-function M.parse_half_rate(selection)
-    local halved = {}
-    if selection == "all" then
-        halved[M.CATEGORY_MAGICAL] = true
-        halved[M.CATEGORY_TOOLS] = true
-        halved[M.CATEGORY_CLOTHING] = true
-    elseif type(selection) == "string" then
-        for part in string.gmatch(selection, "[^+]+") do
-            halved[part] = true
+-- Reads the per-category settings through `get` (GetModConfigData) into
+-- { [category] = { store, repair, half } }. A missing store or repair
+-- setting means Yes; a missing half rate falls back to M.HALF_RATE_DEFAULTS.
+function M.parse_category_settings(get)
+    local settings = {}
+    for _, category in ipairs(M.CATEGORIES) do
+        local half = get("halfrate_" .. category)
+        if half == nil then
+            half = M.HALF_RATE_DEFAULTS[category] == true
         end
+        settings[category] =
+        {
+            store = get("store_" .. category) ~= false,
+            repair = get("repair_" .. category) ~= false,
+            half = half == true,
+        }
     end
-    return halved
+    return settings
 end
 
--- Recovery rate multiplier for an item, given a parse_half_rate set.
-function M.rate_multiplier(halved, prefab, is_usage_fueled)
-    if halved[M.item_category(prefab, is_usage_fueled)] then
-        return M.MAGIC_RATE_MULTIPLIER
+-- Percent per day a category recovers at, given the global recovery rate:
+-- 0 when the category is not stored or not repaired.
+function M.category_rate(settings, category, recovery_rate)
+    local s = settings[category]
+    if s == nil or not s.store or not s.repair then
+        return 0
     end
-    return 1
+    return s.half and recovery_rate * M.HALF_RATE_MULTIPLIER or recovery_rate
 end
 
--- Storage filter: equipment may be stored, perishables may not.
-function M.accepts_item(is_equippable, is_perishable)
-    return is_equippable == true and is_perishable ~= true
+-- Storage filter: equipment (plus the listed extras) may be stored,
+-- perishables may not.
+function M.accepts_item(is_equippable, is_perishable, prefab)
+    local storable = is_equippable == true or (type(prefab) == "string" and M.STORABLE_EXTRAS[prefab] == true)
+    return storable and is_perishable ~= true
 end
 
 -- Returns the supported UI specification for a configuration value. A copy
