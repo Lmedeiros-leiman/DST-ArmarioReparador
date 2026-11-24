@@ -119,11 +119,31 @@ M.CATEGORIES =
     M.CATEGORY_TOOLS,
 }
 
--- Kit gear is recognized by its forgerepairable component (Brightshade,
--- Void cloth, W.A.R.B.I.S.). Dreadstone has no kit but heals itself, so it
--- is listed by name.
+-- Kit gear: fixed with a repair kit (Brightshade, Void cloth, W.A.R.B.I.S.),
+-- plus Dreadstone, which has no kit but heals itself. Listed by name because
+-- the game only tags forgerepairable_<material> while an item is damaged,
+-- so clients could not tell undamaged kit gear apart. The kit trait still
+-- catches modded kit gear.
 M.KIT_ITEMS =
 {
+    -- Brightshade
+    armor_lunarplant = true,
+    lunarplanthat = true,
+    sword_lunarplant = true,
+    pickaxe_lunarplant = true,
+    shovel_lunarplant = true,
+    staff_lunarplant = true,
+    -- Void cloth
+    armor_voidcloth = true,
+    voidclothhat = true,
+    voidcloth_scythe = true,
+    voidcloth_boomerang = true,
+    voidcloth_umbrella = true,
+    shadow_battleaxe = true,
+    -- W.A.R.B.I.S.
+    armorwagpunk = true,
+    wagpunkhat = true,
+    -- Dreadstone
     armordreadstone = true,
     dreadstonehat = true,
 }
