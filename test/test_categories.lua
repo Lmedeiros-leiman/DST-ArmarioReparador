@@ -39,7 +39,7 @@ local function category(prefab, usage, traits)
 end
 
 check("categories are listed in precedence order", function()
-    local expected = { "refillable", "kit", "boss", "ancient", "magical", "light", "clothing", "tools" }
+    local expected = { "refillable", "kit", "boss", "ancient", "ancient_magic", "magical", "light", "clothing", "tools" }
     for i, name in ipairs(expected) do
         if M.CATEGORIES[i] ~= name then return false end
     end
@@ -83,8 +83,15 @@ for _, prefab in ipairs({ "ruinshat", "armorruins", "ruins_bat" }) do
         return category(prefab, false, {}) == "ancient"
     end)
 end
-for _, prefab in ipairs({ "greenstaff", "orangestaff", "yellowstaff", "opalstaff", "greenamulet", "yellowamulet" }) do
-    check(prefab .. " (ancient magic) stays magical", function()
+-- Ancient tab magic gets its own category, the Lazy Forager included.
+for _, prefab in ipairs({ "greenstaff", "orangestaff", "yellowstaff", "opalstaff",
+    "greenamulet", "yellowamulet", "orangeamulet" }) do
+    check(prefab .. " is ancient magic", function()
+        return category(prefab, false, {}) == "ancient_magic"
+    end)
+end
+for _, prefab in ipairs({ "firestaff", "icestaff", "telestaff", "amulet", "purpleamulet", "nightsword" }) do
+    check(prefab .. " stays magical", function()
         return category(prefab, false, {}) == "magical"
     end)
 end
@@ -115,31 +122,55 @@ end)
 check("a perishable pan flute would still be refused", function()
     return M.accepts_item(false, true, "panflute") == false
 end)
-check("half speed covers the pan flute with magical", function()
-    return M.rate_multiplier(M.parse_half_rate("magical"), "panflute", false) == 0.5
-end)
-for _, prefab in ipairs({ "armorskeleton", "ruins_bat", "torch", "armordreadstone" }) do
-    check("half speed 'all' leaves " .. prefab .. " at full speed", function()
-        return M.rate_multiplier(M.parse_half_rate("all"), prefab, false) == 1
-    end)
+
+-- Per-category settings: store_<c>, repair_<c>, halfrate_<c>.
+local function settings(config)
+    return M.parse_category_settings(function(key) return config[key] end)
 end
-check("half speed 'all' leaves a refillable item at full speed", function()
-    return M.rate_multiplier(M.parse_half_rate("all"), "wateringcan", false, { fillable = true }) == 1
-end)
-check("missing allowed settings allow every category", function()
-    local allowed = M.parse_allowed(function() return nil end)
+check("missing settings store and repair every category", function()
+    local s = settings({})
     for _, name in ipairs(M.CATEGORIES) do
-        if allowed[name] ~= true then return false end
+        if s[name].store ~= true or s[name].repair ~= true then return false end
     end
     return true
 end)
-check("a category set to false is not allowed", function()
-    local allowed = M.parse_allowed(function(key) if key == "allow_boss" then return false end end)
-    return allowed.boss == false and allowed.tools == true
+check("missing half-rate settings halve magical and ancient magic only", function()
+    local s = settings({})
+    for _, name in ipairs(M.CATEGORIES) do
+        local expected = name == "magical" or name == "ancient_magic"
+        if s[name].half ~= expected then return false end
+    end
+    return true
+end)
+check("full speed by default for tools", function()
+    return M.category_rate(settings({}), "tools", 10) == 10
+end)
+check("half speed by default for magical", function()
+    return M.category_rate(settings({}), "magical", 10) == 5
+end)
+check("halfrate_tools halves tools", function()
+    return M.category_rate(settings({ halfrate_tools = true }), "tools", 10) == 5
+end)
+check("halfrate_magical set to No restores full speed", function()
+    return M.category_rate(settings({ halfrate_magical = false }), "magical", 10) == 10
+end)
+check("repair_boss set to No stops boss repairs", function()
+    return M.category_rate(settings({ repair_boss = false }), "boss", 10) == 0
+end)
+check("store_boss set to No also stops boss repairs", function()
+    return M.category_rate(settings({ store_boss = false }), "boss", 10) == 0
+end)
+check("a store setting only affects its own category", function()
+    local s = settings({ store_boss = false })
+    return s.boss.store == false and s.tools.store == true
+end)
+check("a magical item at 5%/day reaches 50% after 20 days at half speed", function()
+    return math.abs(M.recover(0, 100, M.category_rate(settings({}), "magical", 5), 480 * 20) - 50) < 1e-9
 end)
 
 ------------------------------------------------------------------------------
--- modinfo exposes one allowed toggle per category, defaulting to Yes.
+-- modinfo exposes Store, Repair and Half rate toggles per category and no
+-- longer has the global half-speed setting.
 
 do
     local info = {}
@@ -150,15 +181,34 @@ do
     for _, option in ipairs(info.configuration_options or {}) do
         options[option.name] = option
     end
-    for _, name in ipairs({ "refillable", "kit", "boss", "ancient", "magical", "light", "clothing", "tools" }) do
-        check("modinfo has a Yes/No allow_" .. name .. " toggle defaulting to Yes", function()
-            local option = options["allow_" .. name]
-            if option == nil or option.default ~= true or #option.options ~= 2 then return false end
-            local values = {}
-            for _, v in ipairs(option.options) do values[tostring(v.data)] = true end
-            return values["true"] and values["false"]
+    local function yes_no(name, default)
+        local option = options[name]
+        if option == nil or option.default ~= default or #option.options ~= 2 then return false end
+        local values = {}
+        for _, v in ipairs(option.options) do values[tostring(v.data)] = true end
+        return values["true"] and values["false"]
+    end
+    for _, name in ipairs({ "refillable", "kit", "boss", "ancient", "ancient_magic", "magical", "light", "clothing", "tools" }) do
+        check("modinfo has store_" .. name .. " defaulting to Yes", function()
+            return yes_no("store_" .. name, true)
+        end)
+        check("modinfo has repair_" .. name .. " defaulting to Yes", function()
+            return yes_no("repair_" .. name, true)
+        end)
+        local half = name == "magical" or name == "ancient_magic"
+        check("modinfo has halfrate_" .. name .. " defaulting to " .. (half and "Yes" or "No"), function()
+            return yes_no("halfrate_" .. name, half)
         end)
     end
+    check("modinfo no longer has the global half_rate setting", function()
+        return options.half_rate == nil
+    end)
+    check("modinfo no longer has allow_* settings", function()
+        for name in pairs(options) do
+            if name:match("^allow_") then return false end
+        end
+        return true
+    end)
 end
 
 ------------------------------------------------------------------------------
@@ -255,28 +305,35 @@ check("server: every category is allowed by default", function()
         and accepts({}, server_item("spear"))
 end)
 check("server: boss gear is refused when boss gear is off", function()
-    return not accepts({ allow_boss = false }, server_item("armorskeleton"))
+    return not accepts({ store_boss = false }, server_item("armorskeleton"))
 end)
 check("server: tools stay allowed when boss gear is off", function()
-    return accepts({ allow_boss = false }, server_item("spear"))
+    return accepts({ store_boss = false }, server_item("spear"))
 end)
 check("server: refillable items are refused when refillable is off", function()
-    return not accepts({ allow_refillable = false }, server_item("wateringcan", { fillable = true, uses = 10 }))
+    return not accepts({ store_refillable = false }, server_item("wateringcan", { fillable = true, uses = 10 }))
 end)
 check("server: kit gear is refused when kit gear is off", function()
-    return not accepts({ allow_kit = false }, server_item("sword_lunarplant", { forge = "lunarplant" }))
+    return not accepts({ store_kit = false }, server_item("sword_lunarplant", { forge = "lunarplant" }))
 end)
 check("server: Thulecite is refused when ancient is off", function()
-    return not accepts({ allow_ancient = false }, server_item("ruins_bat"))
+    return not accepts({ store_ancient = false }, server_item("ruins_bat"))
+end)
+check("server: ancient staffs are refused when ancient magic is off", function()
+    return not accepts({ store_ancient_magic = false }, server_item("greenstaff", { uses = 5 }))
+        and accepts({ store_ancient = false }, server_item("greenstaff", { uses = 5 }))
 end)
 check("server: light sources are refused when light is off", function()
-    return not accepts({ allow_light = false }, server_item("torch", { fueltype = "BURNABLE" }))
+    return not accepts({ store_light = false }, server_item("torch", { fueltype = "BURNABLE" }))
 end)
 check("server: the pan flute is accepted", function()
     return accepts({}, server_item("panflute", { equippable = false, uses = 5 }))
 end)
 check("server: the pan flute follows the magical toggle", function()
-    return not accepts({ allow_magical = false }, server_item("panflute", { equippable = false, uses = 5 }))
+    return not accepts({ store_magical = false }, server_item("panflute", { equippable = false, uses = 5 }))
+end)
+check("server: an item that cannot be repaired can still be stored", function()
+    return accepts({ repair_tools = false }, server_item("spear"))
 end)
 check("server: other non-equippable items stay out", function()
     return not accepts({}, server_item("rope", { equippable = false }))
@@ -284,45 +341,45 @@ end)
 
 -- Client side: the same decisions from replicas and tags.
 check("client: kit gear is refused when kit gear is off", function()
-    return not accepts({ allow_kit = false }, client_item("sword_lunarplant", { forgerepairable_lunarplant = true }), false)
+    return not accepts({ store_kit = false }, client_item("sword_lunarplant", { forgerepairable_lunarplant = true }), false)
 end)
 check("client: refillable items are refused when refillable is off", function()
-    return not accepts({ allow_refillable = false }, client_item("wateringcan", { fillable = true }), false)
+    return not accepts({ store_refillable = false }, client_item("wateringcan", { fillable = true }), false)
 end)
 check("client: damaged clothing (needssewing) is refused when clothing is off", function()
-    return not accepts({ allow_clothing = false }, client_item("tophat", { needssewing = true }), false)
+    return not accepts({ store_clothing = false }, client_item("tophat", { needssewing = true }), false)
 end)
 check("client: damaged clothing stays allowed when only tools are off", function()
-    return accepts({ allow_tools = false }, client_item("tophat", { needssewing = true }), false)
+    return accepts({ store_tools = false }, client_item("tophat", { needssewing = true }), false)
 end)
 -- Full clothing carries no fuel tag at all, so a client cannot tell it from
 -- a tool; it must not refuse what the server would accept.
 check("client: full clothing (no tags) stays allowed when only tools are off", function()
-    return accepts({ allow_tools = false }, client_item("tophat", {}), false)
+    return accepts({ store_tools = false }, client_item("tophat", {}), false)
 end)
 check("client: a tool is refused when tools and clothing are both off", function()
-    return not accepts({ allow_tools = false, allow_clothing = false }, client_item("spear", {}), false)
+    return not accepts({ store_tools = false, store_clothing = false }, client_item("spear", {}), false)
 end)
 check("server: full clothing is refused when clothing is off", function()
     local hat = server_item("tophat", { fueltype = "USAGE" })
     hat.components.fueled.currentfuel = 100
     hat.tags.needssewing = nil
-    return not accepts({ allow_clothing = false }, hat)
+    return not accepts({ store_clothing = false }, hat)
 end)
 check("client: a modded cave-fueled lamp follows the light toggle", function()
-    return not accepts({ allow_light = false }, client_item("modded_lamp", { CAVE_fueled = true }), false)
+    return not accepts({ store_light = false }, client_item("modded_lamp", { CAVE_fueled = true }), false)
 end)
 check("client: undamaged kit gear (no repair tag) follows the kit toggle", function()
-    return not accepts({ allow_kit = false }, client_item("sword_lunarplant", {}), false)
-        and accepts({ allow_tools = false }, client_item("sword_lunarplant", {}), false)
+    return not accepts({ store_kit = false }, client_item("sword_lunarplant", {}), false)
+        and accepts({ store_tools = false }, client_item("sword_lunarplant", {}), false)
 end)
 check("client: the pan flute is accepted", function()
     return accepts({}, client_item("panflute", {}, false), false)
 end)
 
--- Repairs
-check("items of a disallowed category stop repairing", function()
-    local _, postinits = load_modmain({ recovery_rate = 10, allow_light = false })
+-- Repairs: a wardrobe whose container holds the given items, after one day.
+local function repair_one_day(config, items)
+    local _, postinits = load_modmain(config)
     local inst = with_tags({ components = {} }, {})
     function inst:UnregisterComponentActions() end
     function inst:DoPeriodicTask() end
@@ -331,27 +388,50 @@ check("items of a disallowed category stop repairing", function()
     end
     inst.components.wardrobe = { changers = {} }
     postinits.wardrobe(inst)
+    for i, item in ipairs(items) do
+        inst.components.container.slots[i] = item
+    end
+    if inst.OnLongUpdate ~= nil then
+        inst.OnLongUpdate(inst, 480)
+    end
+end
+
+check("items of a category that is no longer stored stop repairing", function()
     local torch = server_item("torch", { fueltype = "BURNABLE" })
     local spear = server_item("spear", { uses = 50 })
-    inst.components.container.slots[1], inst.components.container.slots[2] = torch, spear
-    inst.OnLongUpdate(inst, 480)
+    repair_one_day({ recovery_rate = 10, store_light = false }, { torch, spear })
     return torch.changes == 0 and spear.changes == 1
 end)
-check("the pan flute repairs its uses", function()
-    local _, postinits = load_modmain({ recovery_rate = 10 })
-    local inst = with_tags({ components = {} }, {})
-    function inst:UnregisterComponentActions() end
-    function inst:DoPeriodicTask() end
-    function inst:AddComponent()
-        self.components.container = { slots = {}, WidgetSetup = function() end, IsOpen = function() return false end }
-    end
-    inst.components.wardrobe = { changers = {} }
-    postinits.wardrobe(inst)
+check("repair_light set to No stores lights without repairing them", function()
+    local torch = server_item("torch", { fueltype = "BURNABLE" })
+    local spear = server_item("spear", { uses = 50 })
+    repair_one_day({ recovery_rate = 10, repair_light = false }, { torch, spear })
+    return torch.changes == 0 and spear.changes == 1
+end)
+check("Enable repair set to No overrides every Repair setting", function()
+    local spear = server_item("spear", { uses = 50 })
+    repair_one_day({ recovery_rate = 10, enable_repair = false, repair_tools = true }, { spear })
+    return spear.changes == 0
+end)
+check("halfrate_tools halves a stored spear", function()
+    local spear = server_item("spear", { uses = 50 })
+    repair_one_day({ recovery_rate = 10, halfrate_tools = true }, { spear })
+    return math.abs(spear.components.finiteuses.current - 55) < 1e-9
+end)
+check("the old half_rate setting is ignored", function()
+    local spear = server_item("spear", { uses = 50 })
+    repair_one_day({ recovery_rate = 10, half_rate = "all" }, { spear })
+    return math.abs(spear.components.finiteuses.current - 60) < 1e-9
+end)
+check("the pan flute repairs its uses at the magical half rate", function()
     local flute = server_item("panflute", { equippable = false, uses = 50 })
-    inst.components.container.slots[1] = flute
-    inst.OnLongUpdate(inst, 480)
-    -- Magical repairs at half speed by default: 10%/day halved is 5 uses.
+    repair_one_day({ recovery_rate = 10 }, { flute })
     return math.abs(flute.components.finiteuses.current - 55) < 1e-9
+end)
+check("an ancient staff repairs at the ancient magic half rate", function()
+    local staff = server_item("greenstaff", { uses = 50 })
+    repair_one_day({ recovery_rate = 10 }, { staff })
+    return math.abs(staff.components.finiteuses.current - 55) < 1e-9
 end)
 
 ------------------------------------------------------------------------------

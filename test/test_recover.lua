@@ -106,44 +106,13 @@ assert_eq(M.accepts_item(false, false), false, "non-equipment is rejected")
 assert_eq(M.accepts_item(nil, false), false, "missing equippable is rejected")
 
 -- Item classification: magical by prefab, clothing by usage fuel, the rest
--- are tools. The Lazy Forager is exempt from the magical list.
+-- are tools. test/test_categories.lua covers the other categories and the
+-- per-category settings.
 assert_eq(M.item_category("panflute", false), "magical", "pan flute is magical")
-assert_eq(M.item_category("greenamulet", false), "magical", "construction amulet is magical")
-assert_eq(M.item_category("yellowamulet", false), "magical", "magiluminescence is magical")
-assert_eq(M.item_category("greenstaff", false), "magical", "deconstruction staff is magical")
-assert_eq(M.item_category("orangestaff", false), "magical", "lazy explorer is magical")
-assert_eq(M.item_category("orangeamulet", false), "tools", "lazy forager counts as a tool")
 assert_eq(M.item_category("spear", false), "tools", "spear is a tool")
 assert_eq(M.item_category("armorwood", false), "tools", "armor counts as a tool")
 assert_eq(M.item_category("tophat", true), "clothing", "usage-fueled gear is clothing")
 assert_eq(M.item_category(nil, false), "tools", "missing prefab is a tool")
-
--- The half-rate setting parses into a set of categories.
-local function half_rate_applies(selection, category)
-    return M.parse_half_rate(selection)[category] == true
-end
-assert_eq(half_rate_applies("none", "magical"), false, "none covers nothing")
-assert_eq(half_rate_applies("all", "clothing"), true, "all covers everything")
-assert_eq(half_rate_applies("magical", "magical"), true, "magical covers magical")
-assert_eq(half_rate_applies("magical", "tools"), false, "magical does not cover tools")
-assert_eq(half_rate_applies("magical+tools", "tools"), true, "magical+tools covers tools")
-assert_eq(half_rate_applies("magical+tools", "magical"), true, "magical+tools covers magical")
-assert_eq(half_rate_applies("magical+tools", "clothing"), false, "magical+tools does not cover clothing")
-assert_eq(half_rate_applies("tools+clothing", "clothing"), true, "tools+clothing covers clothing")
-assert_eq(half_rate_applies(nil, "magical"), false, "missing setting covers nothing")
-
--- Multiplier under the default setting ("magical").
-assert_eq(M.rate_multiplier(M.parse_half_rate("magical"), "firestaff", false), 0.5, "staff recovers at half rate")
-assert_eq(M.rate_multiplier(M.parse_half_rate("magical"), "orangeamulet", false), 1, "lazy forager recovers at full rate")
-assert_eq(M.rate_multiplier(M.parse_half_rate("magical"), "spear", false), 1, "tool recovers at full rate")
-assert_eq(M.rate_multiplier(M.parse_half_rate("magical"), "tophat", true), 1, "clothing recovers at full rate")
-assert_eq(M.rate_multiplier(M.parse_half_rate("all"), "spear", false), 0.5, "all halves tools")
-assert_eq(M.rate_multiplier(M.parse_half_rate("none"), "firestaff", false), 1, "none keeps staffs at full rate")
-assert_eq(M.rate_multiplier(M.parse_half_rate("clothing"), "tophat", true), 0.5, "clothing setting halves clothing")
-assert_near(M.recover(0, 100, 5 * M.rate_multiplier(M.parse_half_rate("magical"), "firestaff", false), 480 * 20), 50, 1e-9,
-    "a magical item at 5%/day reaches 50% after 20 days")
-assert_near(M.recover(0, 100, 5 * M.rate_multiplier(M.parse_half_rate("magical"), "firestaff", false), 480 * 40), 100, 1e-9,
-    "a magical item at 5%/day fills in 40 days")
 
 -- The mod configuration accepts square grids from 2x2 through 7x7, plus
 -- the existing 5x4 default. Unsupported values must not create invisible
