@@ -30,7 +30,9 @@ local function server_traits(item)
 end
 
 -- The same traits on a client, from the tags those components network:
--- "fillable", "forgerepairable_<material>" and "<FUELTYPE>_fueled".
+-- "fillable", "forgerepairable_<material>" (only while damaged, hence the
+-- kit name list), "<FUELTYPE>_fueled" (fuel that accepts refueling) and
+-- "needssewing" (usage fuel, only while damaged).
 local function client_traits(item)
     local kit = false
     for _, material in pairs(GLOBAL.FORGEMATERIALS) do
@@ -50,12 +52,23 @@ local function client_traits(item)
         fillable = item:HasTag("fillable"),
         kit = kit,
         light_fuel = light_fuel,
-    }, item:HasTag("USAGE_fueled")
+    }, item:HasTag("needssewing")
 end
 
 local function category_of(item, traits_fn)
     local traits, usage = traits_fn(item)
     return mathmod.item_category(item.prefab, usage, traits)
+end
+
+-- Full-durability clothing carries no fuel tag, so a client sees it as a
+-- tool. Accept a "tool" if either category is allowed and let the server,
+-- which reads the components, refuse it: a refused move just bounces back,
+-- while a client refusing what the server allows would block the item.
+local function client_allows(category)
+    if category == mathmod.CATEGORY_TOOLS then
+        return allowed[mathmod.CATEGORY_TOOLS] or allowed[mathmod.CATEGORY_CLOTHING]
+    end
+    return allowed[category]
 end
 
 local slotpos = {}
@@ -154,7 +167,7 @@ containers.params.wardrobe =
             item.replica ~= nil and item.replica.equippable ~= nil,
             item:HasTag("show_spoilage"),
             item.prefab)
-            and allowed[category_of(item, client_traits)]
+            and client_allows(category_of(item, client_traits))
     end,
 }
 
