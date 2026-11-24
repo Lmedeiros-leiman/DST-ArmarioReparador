@@ -227,7 +227,9 @@ local function server_item(prefab, spec)
     if spec.fueltype then
         comps.fueled = { currentfuel = 50, maxfuel = 100, fueltype = spec.fueltype,
             DoDelta = function(self, n) item.changes = item.changes + 1; self.currentfuel = math.min(self.currentfuel + n, self.maxfuel) end }
-        item.tags[spec.fueltype .. "_fueled"] = true
+        -- fueled.lua: usage fuel tags "needssewing" only while damaged (this
+        -- stub is at 50/100); other fuel tags "<FUELTYPE>_fueled".
+        item.tags[spec.fueltype == "USAGE" and "needssewing" or (spec.fueltype .. "_fueled")] = true
     end
     if spec.fillable then comps.fillable = {}; item.tags.fillable = true end
     if spec.forge then comps.forgerepairable = {}; item.tags["forgerepairable_" .. spec.forge] = true end
@@ -287,11 +289,25 @@ end)
 check("client: refillable items are refused when refillable is off", function()
     return not accepts({ allow_refillable = false }, client_item("wateringcan", { fillable = true }), false)
 end)
-check("client: clothing is refused when clothing is off", function()
-    return not accepts({ allow_clothing = false }, client_item("tophat", { USAGE_fueled = true }), false)
+check("client: damaged clothing (needssewing) is refused when clothing is off", function()
+    return not accepts({ allow_clothing = false }, client_item("tophat", { needssewing = true }), false)
 end)
-check("client: clothing stays allowed when only tools are off", function()
-    return accepts({ allow_tools = false }, client_item("tophat", { USAGE_fueled = true }), false)
+check("client: damaged clothing stays allowed when only tools are off", function()
+    return accepts({ allow_tools = false }, client_item("tophat", { needssewing = true }), false)
+end)
+-- Full clothing carries no fuel tag at all, so a client cannot tell it from
+-- a tool; it must not refuse what the server would accept.
+check("client: full clothing (no tags) stays allowed when only tools are off", function()
+    return accepts({ allow_tools = false }, client_item("tophat", {}), false)
+end)
+check("client: a tool is refused when tools and clothing are both off", function()
+    return not accepts({ allow_tools = false, allow_clothing = false }, client_item("spear", {}), false)
+end)
+check("server: full clothing is refused when clothing is off", function()
+    local hat = server_item("tophat", { fueltype = "USAGE" })
+    hat.components.fueled.currentfuel = 100
+    hat.tags.needssewing = nil
+    return not accepts({ allow_clothing = false }, hat)
 end)
 check("client: a modded cave-fueled lamp follows the light toggle", function()
     return not accepts({ allow_light = false }, client_item("modded_lamp", { CAVE_fueled = true }), false)
