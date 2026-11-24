@@ -91,16 +91,17 @@ function M.recover(current, max_amount, rate_per_day, dt, day_length)
     return next_value
 end
 
--- Categories selected by the half-rate setting recover at this fraction of
--- the configured rate.
-M.MAGIC_RATE_MULTIPLIER = 0.5
+-- Categories set to half rate recover at this fraction of the configured
+-- rate.
+M.HALF_RATE_MULTIPLIER = 0.5
 
--- Item categories. Each has an "allow_<name>" setting; the half-rate
--- setting covers magical, tools and clothing only.
+-- Item categories. Each has "store_<name>", "repair_<name>" and
+-- "halfrate_<name>" settings.
 M.CATEGORY_REFILLABLE = "refillable"
 M.CATEGORY_KIT = "kit"
 M.CATEGORY_BOSS = "boss"
 M.CATEGORY_ANCIENT = "ancient"
+M.CATEGORY_ANCIENT_MAGIC = "ancient_magic"
 M.CATEGORY_MAGICAL = "magical"
 M.CATEGORY_LIGHT = "light"
 M.CATEGORY_CLOTHING = "clothing"
@@ -113,10 +114,18 @@ M.CATEGORIES =
     M.CATEGORY_KIT,
     M.CATEGORY_BOSS,
     M.CATEGORY_ANCIENT,
+    M.CATEGORY_ANCIENT_MAGIC,
     M.CATEGORY_MAGICAL,
     M.CATEGORY_LIGHT,
     M.CATEGORY_CLOTHING,
     M.CATEGORY_TOOLS,
+}
+
+-- Categories that recover at half rate unless their setting says otherwise.
+M.HALF_RATE_DEFAULTS =
+{
+    [M.CATEGORY_ANCIENT_MAGIC] = true,
+    [M.CATEGORY_MAGICAL] = true,
 }
 
 -- Kit gear: fixed with a repair kit (Brightshade, Void cloth, W.A.R.B.I.S.),
@@ -173,12 +182,9 @@ M.ANCIENT_ITEMS =
     ruins_bat = true,
 }
 
--- Prefab names of magical, non-clothing items with durability. The Lazy
--- Forager (orangeamulet) is intentionally left out: it is niche enough
--- that it always counts as an ordinary tool.
+-- Prefab names of magical, non-clothing items with durability.
 M.MAGIC_ITEMS =
 {
-    -- Magic tab
     panflute = true,
     onemanband = true,
     nightsword = true,
@@ -192,13 +198,18 @@ M.MAGIC_ITEMS =
     firestaff = true,
     icestaff = true,
     telestaff = true,
-    -- Ancient tab
-    greenamulet = true,
-    yellowamulet = true,
+}
+
+-- Magic from the Ancient tab: staffs and amulets.
+M.ANCIENT_MAGIC_ITEMS =
+{
     greenstaff = true,
     orangestaff = true,
     yellowstaff = true,
     opalstaff = true,
+    greenamulet = true,
+    yellowamulet = true,
+    orangeamulet = true,
 }
 
 -- Light sources by name: the torch and Morning Star burn the default fuel
@@ -249,6 +260,9 @@ function M.item_category(prefab, is_usage_fueled, traits)
     if known and M.ANCIENT_ITEMS[prefab] then
         return M.CATEGORY_ANCIENT
     end
+    if known and M.ANCIENT_MAGIC_ITEMS[prefab] then
+        return M.CATEGORY_ANCIENT_MAGIC
+    end
     if known and M.MAGIC_ITEMS[prefab] then
         return M.CATEGORY_MAGICAL
     end
@@ -261,45 +275,34 @@ function M.item_category(prefab, is_usage_fueled, traits)
     return M.CATEGORY_TOOLS
 end
 
--- Parses the half-rate setting ("none", "all", or categories joined with
--- "+", e.g. "magical+tools") into a set of categories. Done once at load so
--- the repair step does not re-parse the string for every item.
-function M.parse_half_rate(selection)
-    local halved = {}
-    if selection == "all" then
-        halved[M.CATEGORY_MAGICAL] = true
-        halved[M.CATEGORY_TOOLS] = true
-        halved[M.CATEGORY_CLOTHING] = true
-    elseif type(selection) == "string" then
-        for part in string.gmatch(selection, "[^+]+") do
-            halved[part] = true
-        end
-    end
-    return halved
-end
-
--- Recovery rate multiplier for a category, given a parse_half_rate set.
-function M.category_multiplier(halved, category)
-    if halved[category] then
-        return M.MAGIC_RATE_MULTIPLIER
-    end
-    return 1
-end
-
--- Recovery rate multiplier for an item, given a parse_half_rate set.
-function M.rate_multiplier(halved, prefab, is_usage_fueled, traits)
-    return M.category_multiplier(halved, M.item_category(prefab, is_usage_fueled, traits))
-end
-
--- Reads the "allow_<category>" settings through `get` (GetModConfigData).
--- Anything but false allows the category, so configs saved before the
--- settings existed keep every category.
-function M.parse_allowed(get)
-    local allowed = {}
+-- Reads the per-category settings through `get` (GetModConfigData) into
+-- { [category] = { store, repair, half } }. A missing store or repair
+-- setting means Yes; a missing half rate falls back to M.HALF_RATE_DEFAULTS.
+function M.parse_category_settings(get)
+    local settings = {}
     for _, category in ipairs(M.CATEGORIES) do
-        allowed[category] = get("allow_" .. category) ~= false
+        local half = get("halfrate_" .. category)
+        if half == nil then
+            half = M.HALF_RATE_DEFAULTS[category] == true
+        end
+        settings[category] =
+        {
+            store = get("store_" .. category) ~= false,
+            repair = get("repair_" .. category) ~= false,
+            half = half == true,
+        }
     end
-    return allowed
+    return settings
+end
+
+-- Percent per day a category recovers at, given the global recovery rate:
+-- 0 when the category is not stored or not repaired.
+function M.category_rate(settings, category, recovery_rate)
+    local s = settings[category]
+    if s == nil or not s.store or not s.repair then
+        return 0
+    end
+    return s.half and recovery_rate * M.HALF_RATE_MULTIPLIER or recovery_rate
 end
 
 -- Storage filter: equipment (plus the listed extras) may be stored,

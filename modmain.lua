@@ -13,8 +13,7 @@ local layout = mathmod.get_slot_layout(GetModConfigData("num_slots"))
 -- Missing (configs saved before the toggle existed) means enabled.
 local repair_enabled = GetModConfigData("enable_repair") ~= false
 local recovery_rate = GetModConfigData("recovery_rate") or 5
-local halved = mathmod.parse_half_rate(GetModConfigData("half_rate") or "magical")
-local allowed = mathmod.parse_allowed(GetModConfigData)
+local settings = mathmod.parse_category_settings(GetModConfigData)
 
 -- What the prefab name cannot tell about an item, read from its components
 -- on the server. Returns the traits for mathmod.item_category and whether
@@ -61,14 +60,14 @@ local function category_of(item, traits_fn)
 end
 
 -- Full-durability clothing carries no fuel tag, so a client sees it as a
--- tool. Accept a "tool" if either category is allowed and let the server,
+-- tool. Accept a "tool" if either category is stored and let the server,
 -- which reads the components, refuse it: a refused move just bounces back,
 -- while a client refusing what the server allows would block the item.
-local function client_allows(category)
+local function client_stores(category)
     if category == mathmod.CATEGORY_TOOLS then
-        return allowed[mathmod.CATEGORY_TOOLS] or allowed[mathmod.CATEGORY_CLOTHING]
+        return settings[mathmod.CATEGORY_TOOLS].store or settings[mathmod.CATEGORY_CLOTHING].store
     end
-    return allowed[category]
+    return settings[category].store
 end
 
 local slotpos = {}
@@ -161,13 +160,13 @@ containers.params.wardrobe =
         if GLOBAL.TheWorld.ismastersim then
             local comps = item.components
             return mathmod.accepts_item(comps.equippable ~= nil, comps.perishable ~= nil, item.prefab)
-                and allowed[category_of(item, server_traits)]
+                and settings[category_of(item, server_traits)].store
         end
         return mathmod.accepts_item(
             item.replica ~= nil and item.replica.equippable ~= nil,
             item:HasTag("show_spoilage"),
             item.prefab)
-            and client_allows(category_of(item, client_traits))
+            and client_stores(category_of(item, client_traits))
     end,
 }
 
@@ -214,13 +213,11 @@ local function recover_items_in(inst, dt)
     end
     for _, item in pairs(container.slots) do
         local comps = item.components
-        local category = category_of(item, server_traits)
         -- Items that rot never recover (and should not be stored anyway);
-        -- disallowed categories stop recovering.
-        if comps.perishable == nil and allowed[category] then
+        -- a category that is not stored or not repaired gets rate 0.
+        local rate = mathmod.category_rate(settings, category_of(item, server_traits), recovery_rate)
+        if comps.perishable == nil and rate > 0 then
             local fueled = comps.fueled
-            -- Selected categories recover at a fraction of the configured rate.
-            local rate = recovery_rate * mathmod.category_multiplier(halved, category)
             -- Each component clamps at its maximum. Full items are skipped so
             -- they do not push percentusedchange on every step.
             local finiteuses = comps.finiteuses
